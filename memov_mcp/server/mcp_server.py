@@ -240,16 +240,25 @@ def auto_mem_snap(files_changed: str = "", project_path: str = None) -> str:
 
         file_states = {}
         if status_result["success"]:
-            for line in status_result["error"].split("\n"):
+            # Check both stdout and stderr for status information
+            status_output = status_result["output"] + "\n" + status_result["error"]
+            for line in status_output.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+
                 if "Untracked:" in line:
-                    filename = clean_ansi_codes(line.split("Untracked:")[1].strip())
-                    file_states[filename] = "untracked"
+                    filename = clean_ansi_codes(line.split("Untracked:")[-1].strip())
+                    if filename:
+                        file_states[filename] = "untracked"
                 elif "Modified:" in line:
-                    filename = clean_ansi_codes(line.split("Modified:")[1].strip())
-                    file_states[filename] = "modified"
+                    filename = clean_ansi_codes(line.split("Modified:")[-1].strip())
+                    if filename:
+                        file_states[filename] = "modified"
                 elif "Clean:" in line:
-                    filename = clean_ansi_codes(line.split("Clean:")[1].strip())
-                    file_states[filename] = "clean"
+                    filename = clean_ansi_codes(line.split("Clean:")[-1].strip())
+                    if filename:
+                        file_states[filename] = "clean"
 
         LOGGER.info(f"File states: {file_states}")
 
@@ -263,18 +272,56 @@ def auto_mem_snap(files_changed: str = "", project_path: str = None) -> str:
             # Check the file states
             untracked_files = []
             modified_files = []
-            for f in file_list:
-                path1 = Path(f).resolve()
-                for file_name, state in file_states.items():
-                    path2 = Path(file_name).resolve()
-                    if path1 != path2:
-                        continue
 
-                    if state == "untracked":
+            # If we have no file_states (parsing failed), fall back to checking file existence
+            if not file_states:
+                LOGGER.warning(
+                    "No file states detected from status output, falling back to file existence check"
+                )
+                for f in file_list:
+                    file_path_to_check = (
+                        f if os.path.isabs(f) else os.path.join(project_path or os.getcwd(), f)
+                    )
+                    if os.path.exists(file_path_to_check):
+                        LOGGER.info(f"File {f} exists, assuming it needs tracking")
                         untracked_files.append(f)
-                    elif state == "modified":
-                        modified_files.append(f)
-                    break
+            else:
+                # Normal path: match files against status output
+                for f in file_list:
+                    # Normalize the file path for comparison
+                    f_normalized = os.path.normpath(f)
+                    f_abs = os.path.abspath(f) if project_path else f
+
+                    found_match = False
+                    for file_name, state in file_states.items():
+                        # Try multiple comparison methods to ensure we find matches
+                        file_name_normalized = os.path.normpath(file_name)
+                        file_name_abs = (
+                            os.path.abspath(file_name) if os.path.isabs(file_name) else file_name
+                        )
+
+                        # Compare in multiple ways to handle different path representations
+                        if (
+                            f_normalized == file_name_normalized
+                            or f == file_name
+                            or f_abs == file_name_abs
+                            or os.path.basename(f) == os.path.basename(file_name)
+                        ):
+                            if state == "untracked":
+                                untracked_files.append(f)
+                            elif state == "modified":
+                                modified_files.append(f)
+                            found_match = True
+                            break
+
+                    # If no match found in file_states but file exists, assume it's untracked
+                    if not found_match:
+                        file_path_to_check = (
+                            f if os.path.isabs(f) else os.path.join(project_path or os.getcwd(), f)
+                        )
+                        if os.path.exists(file_path_to_check):
+                            LOGGER.info(f"File {f} not found in status output, assuming untracked")
+                            untracked_files.append(f)
 
             # Track untracked files (this automatically commits them)
             if untracked_files:
@@ -387,7 +434,10 @@ def auto_mem_rename(old_path: str, new_path: str, project_path: str = None) -> s
         LOGGER.info(f"Status result: {status_result}")
 
         if not status_result["success"]:
-            if "does not exist" in status_result["error"] or "not initialized" in status_result["error"]:
+            if (
+                "does not exist" in status_result["error"]
+                or "not initialized" in status_result["error"]
+            ):
                 # Auto-initialize if not exists
                 init_result = run_mem_command(["init"], project_path)
                 if not init_result["success"]:
@@ -401,10 +451,14 @@ def auto_mem_rename(old_path: str, new_path: str, project_path: str = None) -> s
         if project_path:
             abs_project_path = os.path.abspath(project_path)
             abs_old_path = (
-                os.path.join(abs_project_path, old_path) if not os.path.isabs(old_path) else old_path
+                os.path.join(abs_project_path, old_path)
+                if not os.path.isabs(old_path)
+                else old_path
             )
             abs_new_path = (
-                os.path.join(abs_project_path, new_path) if not os.path.isabs(new_path) else new_path
+                os.path.join(abs_project_path, new_path)
+                if not os.path.isabs(new_path)
+                else new_path
             )
         else:
             abs_old_path = os.path.abspath(old_path)
@@ -508,7 +562,10 @@ def auto_mem_remove(file_path: str, reason: str = "", project_path: str = None) 
         LOGGER.info(f"Status result: {status_result}")
 
         if not status_result["success"]:
-            if "does not exist" in status_result["error"] or "not initialized" in status_result["error"]:
+            if (
+                "does not exist" in status_result["error"]
+                or "not initialized" in status_result["error"]
+            ):
                 # Auto-initialize if not exists
                 init_result = run_mem_command(["init"], project_path)
                 if not init_result["success"]:
@@ -522,7 +579,9 @@ def auto_mem_remove(file_path: str, reason: str = "", project_path: str = None) 
         if project_path:
             abs_project_path = os.path.abspath(project_path)
             abs_file_path = (
-                os.path.join(abs_project_path, file_path) if not os.path.isabs(file_path) else file_path
+                os.path.join(abs_project_path, file_path)
+                if not os.path.isabs(file_path)
+                else file_path
             )
         else:
             abs_file_path = os.path.abspath(file_path)
@@ -537,7 +596,9 @@ def auto_mem_remove(file_path: str, reason: str = "", project_path: str = None) 
             cmd_args.extend(["-r", reason])
 
         # Execute mem remove command
-        LOGGER.info(f"Executing mem remove for {file_path} with prompt: {prompt} and reason: {reason}")
+        LOGGER.info(
+            f"Executing mem remove for {file_path} with prompt: {prompt} and reason: {reason}"
+        )
         remove_result = run_mem_command(cmd_args, project_path)
         LOGGER.info(f"Remove result: {remove_result}")
 

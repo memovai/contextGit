@@ -6,6 +6,7 @@ Mov CLI - Command line interface for managing Memov MCP servers
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -73,29 +74,29 @@ class MovCLI:
 
         # Start server in background
         try:
-            # Find the Memov MCP package
+            # Check if Memov MCP package is available
             mov_spec = importlib.util.find_spec("memov_mcp")
             if mov_spec is None:
                 print("❌ Error: Memov MCP package not found. Please install it first.")
                 return False
-            script_dir = Path(mov_spec.origin).parent
 
-            # Start the server process using poetry script
+            # Start the server process using uvicorn directly
+            env = os.environ.copy()
+            env["MEMOV_DEFAULT_PROJECT"] = str(workspace_path)
+
             process = subprocess.Popen(
                 [
-                    "poetry",
-                    "run",
-                    "start-mcp",
-                    "http",
-                    str(workspace_path),
-                    "--port",
-                    str(port),
+                    "uvicorn",
+                    "memov_mcp.server.mcp_http_server:create_app_factory",
                     "--host",
                     host,
+                    "--port",
+                    str(port),
+                    "--factory",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=script_dir,
+                env=env,
                 text=True,
             )
 

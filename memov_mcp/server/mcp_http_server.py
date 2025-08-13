@@ -177,5 +177,14 @@ def main():
     uvicorn.run(app, host=args.host, port=args.port)
 
 
+def create_app_factory():
+    """Factory function for uvicorn to create the app"""
+    import os
+
+    project_path = os.environ.get("MEMOV_DEFAULT_PROJECT", ".")
+    server = MCPHTTPServer(project_path)
+    return server.create_app()
+
+
 if __name__ == "__main__":
     main()

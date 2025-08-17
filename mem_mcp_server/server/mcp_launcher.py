@@ -26,7 +26,7 @@ def mcp_launcher(
     project_path: Annotated[
         str, typer.Argument(help="Path to the project directory to monitor (required)")
     ],
-    port: Annotated[int, typer.Option(help="Port for HTTP server")] = 8080,
+    port: Annotated[int, typer.Option(help="Port for HTTP server")] = 8000,
     host: Annotated[str, typer.Option(help="Host for HTTP server")] = "127.0.0.1",
 ):
     """Main launcher for MCP servers"""
@@ -44,9 +44,6 @@ def mcp_launcher(
     if not os.path.isdir(project_path):
         typer.echo(f"Error: Project path '{project_path}' is not a directory.", err=True)
         raise typer.Exit(1)
-
-    # Set environment variable for project path
-    os.environ["MEMOV_DEFAULT_PROJECT"] = os.path.abspath(project_path)
 
     # Set up logging to file
     log_path = CONFIG_DIR / "logs" / f"mcp_{time.strftime('%Y%m%d_%H%M%S')}.log"

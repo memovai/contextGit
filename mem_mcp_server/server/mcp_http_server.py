@@ -8,6 +8,7 @@ import logging
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
@@ -19,11 +20,11 @@ LOGGER = logging.getLogger(__name__)
 class MCPHTTPServer:
     """HTTP wrapper for MCP server"""
 
-    def __init__(self, project_path: str = "."):
+    def __init__(self, project_path: str) -> None:
         self.project_path = project_path
         self.mcp_server = mcp
 
-    async def handle_mcp_request(self, request):
+    async def handle_mcp_request(self, request: Request) -> JSONResponse:
         """Handle MCP requests over HTTP"""
         try:
             # Get request body
@@ -36,6 +37,7 @@ class MCPHTTPServer:
             LOGGER.info(f"Received MCP request: {data}")
 
             if method == "initialize":
+                # TODO: sync version
                 return JSONResponse(
                     {
                         "jsonrpc": "2.0",
@@ -43,7 +45,7 @@ class MCPHTTPServer:
                         "result": {
                             "protocolVersion": "2024-11-05",
                             "capabilities": {"tools": {}},
-                            "serverInfo": {"name": "Memov MCP Server", "version": "1.0.0"},
+                            "serverInfo": {"name": "Memov MCP Server", "version": "0.0.1"},
                         },
                     }
                 )
@@ -67,15 +69,15 @@ class MCPHTTPServer:
 
             elif method == "tools/call":
                 # Execute tool
-                tool_name = params.get("name")
+                tool_name = params.get("name", None)
                 tool_args = params.get("arguments", {})
+
+                # Override project_path whatever the agent provides
+                if "project_path" in tool_args:
+                    tool_args["project_path"] = self.project_path
 
                 if tool_name in self.mcp_server._tool_manager._tools:
                     try:
-                        # Add default project_path if not provided
-                        if "project_path" not in tool_args:
-                            tool_args["project_path"] = self.project_path
-
                         tool_obj = self.mcp_server._tool_manager._tools[tool_name]
                         result = tool_obj.fn(**tool_args)
                         return JSONResponse(
@@ -123,7 +125,7 @@ class MCPHTTPServer:
                 }
             )
 
-    async def health_check(self, request):
+    async def health_check(self, request: Request) -> JSONResponse:
         """Health check endpoint"""
         return JSONResponse(
             {
@@ -133,7 +135,7 @@ class MCPHTTPServer:
             }
         )
 
-    def create_app(self):
+    def create_app(self) -> Starlette:
         """Create Starlette application"""
         routes = [
             Route("/mcp", self.handle_mcp_request, methods=["POST"]),
@@ -174,15 +176,6 @@ def main():
 
     # Run server
     uvicorn.run(app, host=args.host, port=args.port)
-
-
-def create_app_factory():
-    """Factory function for uvicorn to create the app"""
-    import os
-
-    project_path = os.environ.get("MEMOV_DEFAULT_PROJECT", ".")
-    server = MCPHTTPServer(project_path)
-    return server.create_app()
 
 
 if __name__ == "__main__":

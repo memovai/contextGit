@@ -16,7 +16,6 @@ import os
 import re
 import subprocess
 import time
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -157,9 +156,8 @@ def set_user_context(
 
 
 @mcp.tool()
-def auto_mem_snap(files_changed: str = "", project_path: str = None) -> str:
-    """
-    Automatically create a mem snap using the stored user context with intelligent workflow.
+def auto_mem_snap(files_changed: str, project_path: str) -> str:
+    """Automatically create a mem snap using the stored user context with intelligent workflow.
 
     **IMPORTANT: Call this tool AFTER completing any file modifications, code changes,
     or task completion to automatically record the user's request and track changed files.**

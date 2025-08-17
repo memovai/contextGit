@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 HTTP MCP Server for Memov - For URL-based MCP integration (e.g., Cursor)
 """

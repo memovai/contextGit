@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Mov CLI - Command line interface for managing Memov MCP servers
 """
@@ -321,7 +320,9 @@ def stop(
 
     # Must specify at least one option
     if not workspace and not port and not all_servers:
-        typer.echo("❌ Error: Must specify at least one option: --workspace, --port, or --all", err=True)
+        typer.echo(
+            "❌ Error: Must specify at least one option: --workspace, --port, or --all", err=True
+        )
         raise typer.Exit(1)
 
     # If --all is specified, ignore other options

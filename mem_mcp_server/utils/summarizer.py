@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Summarizer module for generating AI-powered summaries using OpenAI API
 """

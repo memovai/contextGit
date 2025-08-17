@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Memov MCP Server - AI-assisted version control with automatic prompt recording
 

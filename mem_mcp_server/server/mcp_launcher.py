@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unified MCP server launcher for Memov
 Supports both stdio and HTTP modes

@@ -2,11 +2,11 @@
 Memov MCP Server - AI-assisted version control with automatic prompt recording
 """
 
-__version__ = "1.0.0"
-__author__ = "Memov Team"
-__email__ = "contact@memov.dev"
+from pathlib import Path
 
-from .cli.mov_cli import MovCLI
+from .cli.server_cli import ServerCLI
 from .server.mcp_server import mcp
 
-__all__ = ["MovCLI", "mcp"]
+CONFIG_DIR = Path.home() / ".mem_mcp_server"
+
+__all__ = ["ServerCLI", "mcp"]

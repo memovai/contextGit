@@ -318,9 +318,11 @@ def create_summary_from_commits(
                 "commit_hashes": [
                     commit.get("commit_hash", "unknown") for commit in commit_details
                 ],
-                "generation_method": "http_openai_api"
-                if summarizer.is_available() and not ai_summary.startswith("❌")
-                else "fallback",
+                "generation_method": (
+                    "http_openai_api"
+                    if summarizer.is_available() and not ai_summary.startswith("❌")
+                    else "fallback"
+                ),
             },
             "raw_context": context,
         }

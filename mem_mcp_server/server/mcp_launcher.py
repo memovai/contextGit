@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from mem_mcp_server import CONFIG_DIR
+from mem_mcp_server.globals import CONFIG_DIR
 
 # Set up logging
 logging.basicConfig(

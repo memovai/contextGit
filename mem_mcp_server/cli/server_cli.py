@@ -13,7 +13,7 @@ from typing import Annotated, Any, Optional
 import psutil
 import typer
 
-from mem_mcp_server import CONFIG_DIR
+from mem_mcp_server.globals import CONFIG_DIR
 
 
 class ServerCLI:
@@ -68,10 +68,6 @@ class ServerCLI:
 
         # Start server in background
         try:
-            # Load existing servers and create server key
-            servers = self.load_servers()
-            server_key = str(workspace_path)
-
             # Start the server process using uvx
             process = subprocess.Popen(
                 [
@@ -86,7 +82,6 @@ class ServerCLI:
                     host,
                     "--port",
                     str(port),
-                    "--factory",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -98,7 +93,7 @@ class ServerCLI:
 
             if process.poll() is None:  # Process is still running
                 # Save server info
-                servers[server_key] = {
+                alive_servers[str(workspace_path)] = {
                     "pid": process.pid,
                     "workspace": str(workspace_path),
                     "port": port,
@@ -107,7 +102,7 @@ class ServerCLI:
                     "start_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "status": "running",
                 }
-                self.save_servers(servers)
+                self.save_servers(alive_servers)
 
                 typer.echo(f"✅ Started Mov server")
                 typer.echo(f"   📁 Workspace: {workspace_path}")
@@ -119,8 +114,8 @@ class ServerCLI:
                 # Process failed to start
                 stdout, stderr = process.communicate()
                 typer.echo(f"❌ Failed to start server:")
-                typer.echo(f"   Output: {stdout.decode()}")
-                typer.echo(f"   Error: {stderr.decode()}")
+                typer.echo(f"   Output: {stdout}")
+                typer.echo(f"   Error: {stderr}")
                 return False
 
         except Exception as e:

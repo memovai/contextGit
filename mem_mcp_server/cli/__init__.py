@@ -1,7 +1,7 @@
 """
-CLI package for Mov command-line interface
+CLI package for managing Mem MCP servers
 """
 
-from .mov_cli import MovCLI
+from .server_cli import ServerCLI
 
-__all__ = ["MovCLI"]
+__all__ = ["ServerCLI"]

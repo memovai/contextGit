@@ -3,91 +3,86 @@
 Mov CLI - Command line interface for managing Memov MCP servers
 """
 
-import argparse
-import importlib.util
+import datetime
 import json
-import os
+import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Annotated, Any, Optional
 
 import psutil
+import typer
+
+from mem_mcp_server import CONFIG_DIR
 
 
-class MovCLI:
-    """Mov CLI manager for MCP servers"""
+class ServerCLI:
+    """CLI manager for Mem MCP servers"""
 
     def __init__(self):
-        self.config_dir = Path.home() / ".mov"
+        self.config_dir = CONFIG_DIR
         self.pid_file = self.config_dir / "servers.json"
         self.config_dir.mkdir(exist_ok=True)
 
-    def load_servers(self) -> Dict:
+    def load_servers(self) -> dict:
         """Load running servers from PID file"""
-        if self.pid_file.exists():
-            try:
-                with open(self.pid_file, "r") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError):
-                return {}
-        return {}
+        if not self.pid_file.exists():
+            return {}
 
-    def save_servers(self, servers: Dict):
+        try:
+            with open(self.pid_file, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def save_servers(self, servers: dict) -> None:
         """Save running servers to PID file"""
         with open(self.pid_file, "w") as f:
             json.dump(servers, f, indent=2)
 
-    def get_server_key(self, workspace: str, port: int) -> str:
-        """Generate unique server key"""
-        return f"{workspace}:{port}"
-
-    def start_server(self, workspace: str, port: int, host: str = "127.0.0.1") -> bool:
+    def start_server(self, workspace: str, port: int = 8000, host: str = "127.0.0.1") -> bool:
         """Start a new MCP server in background"""
         workspace_path = Path(workspace).resolve()
 
         if not workspace_path.exists():
-            print(f"❌ Error: Workspace path '{workspace}' does not exist")
+            typer.echo(f"❌ Error: Workspace path '{workspace}' does not exist", err=True)
             return False
 
         if not workspace_path.is_dir():
-            print(f"❌ Error: Workspace path '{workspace}' is not a directory")
+            typer.echo(f"❌ Error: Workspace path '{workspace}' is not a directory", err=True)
+            return False
+
+        # Check if port is already in use
+        if self.is_port_in_use(host, port):
+            typer.echo(f"❌ Error: IP {host}:{port} is already in use", err=True)
             return False
 
         # Check if server is already running
-        servers = self.load_servers()
-        server_key = self.get_server_key(str(workspace_path), port)
-
-        if server_key in servers:
-            pid = servers[server_key]["pid"]
-            if psutil.pid_exists(pid):
-                print(f"⚠️  Server already running on port {port} for workspace {workspace}")
-                return False
-            else:
-                # Clean up stale entry
-                del servers[server_key]
-
-        # Check if port is already in use
-        if self.is_port_in_use(port):
-            print(f"❌ Error: Port {port} is already in use")
+        alive_servers = self.status(verbose=False)
+        if str(workspace_path) in alive_servers:
+            typer.echo(
+                f"⚠️  Server already running on ip {host}:{port} for workspace {workspace}",
+                err=True,
+            )
             return False
 
         # Start server in background
         try:
-            # Check if Memov MCP package is available
-            mov_spec = importlib.util.find_spec("memov_mcp")
-            if mov_spec is None:
-                print("❌ Error: Memov MCP package not found. Please install it first.")
-                return False
+            # Load existing servers and create server key
+            servers = self.load_servers()
+            server_key = str(workspace_path)
 
-            # Start the server process using uvicorn directly
-            env = os.environ.copy()
-            env["MEMOV_DEFAULT_PROJECT"] = str(workspace_path)
-
+            # Start the server process using uvx
             process = subprocess.Popen(
                 [
-                    "uvicorn",
-                    "memov_mcp.server.mcp_http_server:create_app_factory",
+                    "uv",
+                    "run",
+                    "mem-mcp-launcher",
+                    "http",
+                    str(workspace_path),
+                    "--port",
+                    str(port),
                     "--host",
                     host,
                     "--port",
@@ -96,7 +91,6 @@ class MovCLI:
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=env,
                 text=True,
             )
 
@@ -110,39 +104,40 @@ class MovCLI:
                     "workspace": str(workspace_path),
                     "port": port,
                     "host": host,
-                    "start_time": time.time(),
+                    "start_timestamp": datetime.datetime.now().timestamp(),
+                    "start_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "status": "running",
                 }
                 self.save_servers(servers)
 
-                print(f"✅ Started Mov server")
-                print(f"   📁 Workspace: {workspace_path}")
-                print(f"   🌐 URL: http://{host}:{port}/mcp")
-                print(f"   🏥 Health: http://{host}:{port}/health")
-                print(f"   🆔 PID: {process.pid}")
+                typer.echo(f"✅ Started Mov server")
+                typer.echo(f"   📁 Workspace: {workspace_path}")
+                typer.echo(f"   🌐 URL: http://{host}:{port}/mcp")
+                typer.echo(f"   🏥 Health: http://{host}:{port}/health")
+                typer.echo(f"   🆔 PID: {process.pid}")
                 return True
             else:
                 # Process failed to start
                 stdout, stderr = process.communicate()
-                print(f"❌ Failed to start server:")
-                if stderr:
-                    print(f"   Error: {stderr.decode()}")
+                typer.echo(f"❌ Failed to start server:")
+                typer.echo(f"   Output: {stdout.decode()}")
+                typer.echo(f"   Error: {stderr.decode()}")
                 return False
 
         except Exception as e:
-            print(f"❌ Error starting server: {e}")
+            typer.echo(f"❌ Error starting server: {e}")
             return False
 
     def stop_server(
-        self, workspace: Optional[str] = None, port: Optional[int] = None, all: bool = False
+        self, workspace: Optional[str] = None, port: Optional[int] = None, all_servers: bool = False
     ):
         """Stop running server(s)"""
         servers = self.load_servers()
 
-        if all:
+        if all_servers:
             # Stop all servers
             if not servers:
-                print("ℹ️  No servers running")
+                typer.echo("ℹ️  No servers running")
                 return
 
             stopped_count = 0
@@ -200,7 +195,7 @@ class MovCLI:
             print("❌ Error: Must specify workspace, port, or use --all")
             return
 
-    def stop_single_server(self, server_key: str, server_info: Dict) -> bool:
+    def stop_single_server(self, server_key: str, server_info: dict) -> bool:
         """Stop a single server"""
 
         def del_server_key():
@@ -236,120 +231,115 @@ class MovCLI:
             print(f"❌ Error stopping server {pid}: {e}")
             return False
 
-    def status(self):
+    def status(self, verbose: bool = True) -> dict[str, dict[str, Any]]:
         """Show status of all servers"""
         servers = self.load_servers()
 
         if not servers:
-            print("ℹ️  No servers running")
-            return
+            if verbose:
+                typer.echo("ℹ️  No servers running")
+            return servers
 
-        print("🔄 Mov Server Status:")
-        print("-" * 80)
+        if verbose:
+            typer.echo("🔄 Mov Server Status:")
+            typer.echo("-" * 80)
 
         running_count = 0
+        server_to_delete = []
         for server_key, server_info in servers.items():
             pid = server_info["pid"]
             workspace = server_info["workspace"]
             port = server_info["port"]
             host = server_info["host"]
+            start_timestamp = server_info["start_timestamp"]
             start_time = server_info["start_time"]
 
             if psutil.pid_exists(pid):
                 process = psutil.Process(pid)
-                uptime = time.time() - start_time
-                uptime_str = self.format_uptime(uptime)
-
-                print(f"✅ Running (PID: {pid})")
-                print(f"   📁 Workspace: {workspace}")
-                print(f"   🌐 URL: http://{host}:{port}/mcp")
-                print(f"   ⏱️  Uptime: {uptime_str}")
-                print(f"   💾 Memory: {process.memory_info().rss / 1024 / 1024:.1f} MB")
-                print()
+                uptime = time.time() - start_timestamp
+                uptime_str = datetime.timedelta(seconds=int(uptime))
                 running_count += 1
+
+                if verbose:
+                    typer.echo(f"✅ Running (PID: {pid})")
+                    typer.echo(f"   📁 Workspace: {workspace}")
+                    typer.echo(f"   🌐 URL: http://{host}:{port}/mcp")
+                    typer.echo(f"   ⏱️ Start time: {start_time}")
+                    typer.echo(f"   ⏱️ Uptime: {uptime_str}")
+                    typer.echo(f"   💾 Memory: {process.memory_info().rss / 1024 / 1024:.1f} MB")
+                    typer.echo()
             else:
-                print(f"❌ Dead (PID: {pid})")
-                print(f"   📁 Workspace: {workspace}")
-                print(f"   🌐 Port: {port}")
-                print()
+                if verbose:
+                    typer.echo(f"❌ Dead (PID: {pid})")
+                    typer.echo(f"   📁 Workspace: {workspace}")
+                    typer.echo(f"   🌐 Port: {port}")
+                    typer.echo()
+                server_to_delete.append(server_key)  # Mark for deletion
 
-        print(f"📊 Summary: {running_count}/{len(servers)} servers running")
+        if verbose:
+            typer.echo(f"📊 Summary: {running_count}/{len(servers)} servers running")
 
-    def format_uptime(self, seconds: float) -> str:
-        """Format uptime in human readable format"""
-        if seconds < 60:
-            return f"{int(seconds)}s"
-        elif seconds < 3600:
-            minutes = int(seconds / 60)
-            return f"{minutes}m {int(seconds % 60)}s"
-        else:
-            hours = int(seconds / 3600)
-            minutes = int((seconds % 3600) / 60)
-            return f"{hours}h {minutes}m"
+        # Clean up dead servers and their config
+        for server_key in server_to_delete:
+            del servers[server_key]
+        self.save_servers(servers)
 
-    def is_port_in_use(self, port: int) -> bool:
+        return servers
+
+    def is_port_in_use(self, host: str, port: int) -> bool:
         """Check if port is already in use"""
-        import socket
-
+        # TODO: change to check http://ip:port/health
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1)
-            return s.connect_ex(("127.0.0.1", port)) == 0
+            return s.connect_ex((host, port)) == 0
 
 
-def main():
-    """Main CLI entry point"""
-    parser = argparse.ArgumentParser(
-        description="Mov - Memov MCP Server Manager",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Start a server
-  mov start --workspace /path/to/project --port 8080
+app = typer.Typer(
+    help="Mem MCP Server Manager - Manage MCP servers for workspace monitoring",
+    rich_markup_mode="rich",
+)
+cli = ServerCLI()
 
-  # Stop a specific server
-  mov stop --workspace /path/to/project --port 8080
 
-  # Stop all servers
-  mov stop --all
+@app.command(help="Start a new MCP server")
+def start(
+    workspace: Annotated[str, typer.Option(help="Workspace directory to monitor")],
+    port: Annotated[int, typer.Option(help="Port to run server on")] = 8000,
+    host: Annotated[str, typer.Option(help="Host to bind to")] = "127.0.0.1",
+):
+    """Start a new server"""
+    cli.start_server(workspace, port, host)
 
-  # Show status
-  mov status
-        """,
-    )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+@app.command(help="Stop running server(s)")
+def stop(
+    workspace: Annotated[Optional[str], typer.Option(help="Workspace directory")] = None,
+    port: Annotated[Optional[int], typer.Option(help="Port number")] = None,
+    all_servers: Annotated[bool, typer.Option("--all", help="Stop all running servers")] = False,
+):
+    """Stop server(s)"""
 
-    # Start command
-    start_parser = subparsers.add_parser("start", help="Start a new server")
-    start_parser.add_argument("--workspace", required=True, help="Workspace directory to monitor")
-    start_parser.add_argument("--port", type=int, required=True, help="Port to run server on")
-    start_parser.add_argument(
-        "--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)"
-    )
+    # Must specify at least one option
+    if not workspace and not port and not all_servers:
+        typer.echo("❌ Error: Must specify at least one option: --workspace, --port, or --all", err=True)
+        raise typer.Exit(1)
 
-    # Stop command
-    stop_parser = subparsers.add_parser("stop", help="Stop server(s)")
-    stop_parser.add_argument("--workspace", help="Workspace directory")
-    stop_parser.add_argument("--port", type=int, help="Port number")
-    stop_parser.add_argument("--all", action="store_true", help="Stop all servers")
+    # If --all is specified, ignore other options
+    if all_servers and (workspace or port):
+        typer.echo("⚠️  Warning: --all flag specified, ignoring other options")
 
-    # Status command
-    subparsers.add_parser("status", help="Show server status")
+    cli.stop_server(workspace, port, all_servers)
 
-    args = parser.parse_args()
 
-    if not args.command:
-        parser.print_help()
-        return
+@app.command(help="Show status of all running servers")
+def status():
+    """Show server status"""
+    cli.status()
 
-    cli = MovCLI()
 
-    if args.command == "start":
-        cli.start_server(args.workspace, args.port, args.host)
-    elif args.command == "stop":
-        cli.stop_server(args.workspace, args.port, args.all)
-    elif args.command == "status":
-        cli.status()
+def main() -> None:
+    """Main CLI entry point using Typer"""
+    app()
 
 
 if __name__ == "__main__":

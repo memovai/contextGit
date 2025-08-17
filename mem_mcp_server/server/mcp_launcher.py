@@ -4,12 +4,15 @@ Unified MCP server launcher for Memov
 Supports both stdio and HTTP modes
 """
 
-import argparse
 import logging
 import os
-import sys
 import time
 from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from mem_mcp_server import CONFIG_DIR
 
 # Set up logging
 logging.basicConfig(
@@ -19,56 +22,35 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 
-def main():
+def mcp_launcher(
+    mode: Annotated[str, typer.Argument(help="Server mode: stdio or http")],
+    project_path: Annotated[
+        str, typer.Argument(help="Path to the project directory to monitor (required)")
+    ],
+    port: Annotated[int, typer.Option(help="Port for HTTP server")] = 8080,
+    host: Annotated[str, typer.Option(help="Host for HTTP server")] = "127.0.0.1",
+):
     """Main launcher for MCP servers"""
-    parser = argparse.ArgumentParser(
-        description="Memov MCP Server Launcher",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Start stdio server (for Claude Desktop)
-  python start_mcp.py stdio /path/to/project
 
-  # Start HTTP server (for Cursor)
-  python start_mcp.py http /path/to/project --port 8080
-        """,
-    )
-
-    parser.add_argument(
-        "mode",
-        choices=["stdio", "http"],
-        help="Server mode: stdio (for Claude Desktop) or http (for Cursor/web)",
-    )
-
-    parser.add_argument(
-        "project_path",
-        help="Path to the project directory to monitor (required)",
-    )
-
-    parser.add_argument(
-        "--port", type=int, default=8080, help="Port for HTTP server (default: 8080)"
-    )
-
-    parser.add_argument(
-        "--host", type=str, default="127.0.0.1", help="Host for HTTP server (default: 127.0.0.1)"
-    )
-
-    args = parser.parse_args()
+    # Validate mode
+    if mode not in ["stdio", "http"]:
+        typer.echo(f"Error: mode must be either 'stdio' or 'http', got '{mode}'", err=True)
+        raise typer.Exit(1)
 
     # Validate project path
-    if not os.path.exists(args.project_path):
-        print(f"Error: Project path '{args.project_path}' does not exist.")
-        sys.exit(1)
+    if not os.path.exists(project_path):
+        typer.echo(f"Error: Project path '{project_path}' does not exist.", err=True)
+        raise typer.Exit(1)
 
-    if not os.path.isdir(args.project_path):
-        print(f"Error: Project path '{args.project_path}' is not a directory.")
-        sys.exit(1)
+    if not os.path.isdir(project_path):
+        typer.echo(f"Error: Project path '{project_path}' is not a directory.", err=True)
+        raise typer.Exit(1)
 
     # Set environment variable for project path
-    os.environ["MEMOV_DEFAULT_PROJECT"] = os.path.abspath(args.project_path)
+    os.environ["MEMOV_DEFAULT_PROJECT"] = os.path.abspath(project_path)
 
     # Set up logging to file
-    log_path = Path.home() / ".mov" / "logs" / f"mcp_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    log_path = CONFIG_DIR / "logs" / f"mcp_{time.strftime('%Y%m%d_%H%M%S')}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     new_file_handler = logging.FileHandler(log_path, mode="a")
     new_file_handler.setFormatter(
@@ -79,10 +61,10 @@ Examples:
     root_logger.addHandler(new_file_handler)
 
     LOGGER.info(f"Starting Memov MCP Server")
-    LOGGER.info(f"Project: {os.path.abspath(args.project_path)}")
-    LOGGER.info(f"Mode: {args.mode}")
+    LOGGER.info(f"Project: {os.path.abspath(project_path)}")
+    LOGGER.info(f"Mode: {mode}")
 
-    if args.mode == "stdio":
+    if mode == "stdio":
         LOGGER.info(f"Protocol: stdio (for Claude Desktop)")
         LOGGER.info(f"Usage: Configure Claude Desktop with this script path")
         LOGGER.info(f"")
@@ -91,25 +73,21 @@ Examples:
 
         stdio_main()
 
-    elif args.mode == "http":
+    elif mode == "http":
         LOGGER.info(f"Protocol: HTTP")
-        LOGGER.info(f"URL: http://{args.host}:{args.port}/mcp")
-        LOGGER.info(f"Health: http://{args.host}:{args.port}/health")
+        LOGGER.info(f"URL: http://{host}:{port}/mcp")
+        LOGGER.info(f"Health: http://{host}:{port}/health")
         LOGGER.info(f"")
         # Import and run HTTP server
         import uvicorn
 
         from .mcp_http_server import MCPHTTPServer
 
-        server = MCPHTTPServer(args.project_path)
+        server = MCPHTTPServer(project_path)
         app = server.create_app()
-        uvicorn.run(app, host=args.host, port=args.port)
+        uvicorn.run(app, host=host, port=port)
 
 
-def cli_main():
-    """CLI entry point"""
-    main()
-
-
-if __name__ == "__main__":
-    cli_main()
+def main():
+    """Main entry point for the MCP launcher script."""
+    typer.run(mcp_launcher)

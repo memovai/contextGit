@@ -1,27 +1,12 @@
 [tool.poetry]
-name = "memov-mcp"
+name = "mem-mcp-server"
 version = "1.0.0"
-description = "MCP Server for Memov - AI-assisted version control with automatic prompt recording"
+description = "MCP Server for mem management and workspace monitoring"
 authors = ["Memov Team <contact@memov.dev>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/memovai/memov-mcp"
-repository = "https://github.com/memovai/memov-mcp"
-documentation = "https://github.com/memovai/memov-mcp/tree/main/docs"
-keywords = ["mcp", "ai", "version-control", "memov", "claude", "cursor"]
-packages = [{include = "memov_mcp"}]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Version Control",
-    "Topic :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+packages = [
+    {include = "mem_mcp_server"},
 ]
 
 [tool.poetry.dependencies]
@@ -30,21 +15,17 @@ mcp = "^1.0.0"
 uvicorn = "^0.24.0"
 starlette = "^0.27.0"
 python-dotenv = "^1.0.0"
+psutil = "^5.9.0"
+typer = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
 black = "^23.0.0"
 isort = "^5.12.0"
-flake8 = "^6.0.0"
-mypy = "^1.5.0"
-psutil = "^5.9.0"
-pre-commit = "^4.2.0"
+pre-commit = "^3.4.0"
 
 [tool.poetry.scripts]
-memov-mcp = "memov_mcp.server.mcp_server:main"
-memov-mcp-http = "memov_mcp.server.mcp_http_server:main"
-mov = "memov_mcp.cli.mov_cli:main"
-start-mcp = "memov_mcp.server.start_mcp:cli_main"
+mem-mcp-server = "mem_mcp_server.cli.server_cli:main"
 
 [build-system]
 requires = ["poetry-core"]
@@ -53,52 +34,14 @@ build-backend = "poetry.core.masonry.api"
 [tool.black]
 line-length = 100
 target-version = ['py310']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
 
 [tool.isort]
 profile = "black"
 line_length = 100
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
-    "--strict-config",
     "--verbose",
 ]

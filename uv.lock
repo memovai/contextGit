@@ -268,6 +268,7 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
+    { name = "memov" },
     { name = "psutil" },
     { name = "starlette" },
     { name = "typer" },
@@ -284,6 +285,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=1.13.0" },
+    { name = "memov", git = "https://github.com/memovai/mem.git" },
     { name = "psutil", specifier = ">=7.0.0" },
     { name = "starlette", specifier = ">=0.47.2" },
     { name = "typer", specifier = ">=0.16.0" },
@@ -295,6 +297,14 @@ dev = [
     { name = "black", specifier = ">=25.1.0" },
     { name = "isort", specifier = ">=6.0.1" },
     { name = "pre-commit", specifier = ">=4.3.0" },
+]
+
+[[package]]
+name = "memov"
+version = "0.0.2"
+source = { git = "https://github.com/memovai/mem.git#28509e58fd6922264ead3ae30df1f2cb27c7bdf3" }
+dependencies = [
+    { name = "pathspec" },
 ]
 
 [[package]]

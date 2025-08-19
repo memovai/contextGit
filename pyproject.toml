@@ -7,6 +7,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.13.0",
+    "memov",
     "psutil>=7.0.0",
     "starlette>=0.47.2",
     "typer>=0.16.0",
@@ -19,6 +20,9 @@ mem-mcp-launcher = "mem_mcp_server.server.mcp_launcher:main"
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+memov = { git = "https://github.com/memovai/mem.git" }
 
 [tool.black]
 line-length = 100

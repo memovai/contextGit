@@ -6,7 +6,6 @@ Supports both stdio and HTTP modes
 import logging
 import os
 import time
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -65,9 +64,10 @@ def mcp_launcher(
         LOGGER.info(f"Usage: Configure Claude Desktop with this script path")
         LOGGER.info(f"")
         # Import and run stdio server
-        from .mcp_server import main as stdio_main
+        from .mcp_server import MemMCPTools
 
-        stdio_main()
+        mem_mcp_tools = MemMCPTools(project_path)
+        mem_mcp_tools.run()
 
     elif mode == "http":
         LOGGER.info(f"Protocol: HTTP")

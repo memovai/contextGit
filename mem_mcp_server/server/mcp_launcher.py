@@ -11,6 +11,7 @@ from typing import Annotated
 import typer
 
 from mem_mcp_server.globals import CONFIG_DIR
+from mem_mcp_server.server.mcp_server import MemMCPTools
 
 # Set up logging
 logging.basicConfig(
@@ -63,8 +64,6 @@ def mcp_launcher(
         LOGGER.info(f"Protocol: stdio (for Claude Desktop)")
         LOGGER.info(f"Usage: Configure Claude Desktop with this script path")
         LOGGER.info(f"")
-        # Import and run stdio server
-        from .mcp_server import MemMCPTools
 
         mem_mcp_tools = MemMCPTools(project_path)
         mem_mcp_tools.run()
@@ -74,16 +73,15 @@ def mcp_launcher(
         LOGGER.info(f"URL: http://{host}:{port}/mcp")
         LOGGER.info(f"Health: http://{host}:{port}/health")
         LOGGER.info(f"")
-        # Import and run HTTP server
-        import uvicorn
 
-        from .mcp_http_server import MCPHTTPServer
-
-        server = MCPHTTPServer(project_path)
-        app = server.create_app()
-        uvicorn.run(app, host=host, port=port)
+        mem_mcp_tools = MemMCPTools(project_path)
+        mem_mcp_tools.run(transport="streamable-http")
 
 
 def main():
     """Main entry point for the MCP launcher script."""
     typer.run(mcp_launcher)
+
+
+if __name__ == "__main__":
+    main()

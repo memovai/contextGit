@@ -17,6 +17,8 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from memov.core.manager import MemovManager, MemStatus
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,13 +40,13 @@ class MemMCPTools:
     def __init__(self, project_path: str) -> None:
         MemMCPTools._project_path = project_path
 
-    def run(self) -> None:
+    def run(self, *args, **kwargs) -> None:
         """
         Run the MCP tools server.
         """
         LOGGER.info("Running MemMCPTools server...")
         # Start the FastMCP server
-        MemMCPTools.mcp.run()
+        MemMCPTools.mcp.run(*args, **kwargs)
 
     # Basic MCP tools
     @staticmethod
@@ -128,6 +130,10 @@ class MemMCPTools:
         except Exception as e:
             LOGGER.error(f"Error in clean_user_context: {e}", exc_info=True)
             return f"❌ Error cleaning user context: {str(e)}"
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health(_req: Request) -> PlainTextResponse:
+        return PlainTextResponse("OK")
 
     # Core MCP tools for intelligent memov integration
     @staticmethod

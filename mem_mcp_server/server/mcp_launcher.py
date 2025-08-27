@@ -48,7 +48,7 @@ def mcp_launcher(
     # Set up logging to file
     log_path = CONFIG_DIR / "logs" / f"mcp_{time.strftime('%Y%m%d_%H%M%S')}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    new_file_handler = logging.FileHandler(log_path, mode="a")
+    new_file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
     new_file_handler.setFormatter(
         logging.Formatter("%(asctime)s - %(levelname)s - %(name)s:%(lineno)s - %(message)s")
     )

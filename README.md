@@ -1,8 +1,10 @@
 # Mem MCP Server
 
-Mem gives coding agents beyond-Git memory: capturing prompts, AI plans, and code changes with zero-friction context management.
+Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.  
+As your **coding partner**, it accelerates debugging, shares context in real time, reuses edits, prevents agentic infinite loops, and turns history into learning.  
 
-It's your coding partner: helping you debug faster, share context in real time, reuse edits, prevent runaway agentic loops, and learn from history.
+- 💬 [Join our Discord](https://discord.gg/YCN75dTh) and dive into smarter context engineering
+- 🌐 [Visit memov.im](https://memov.im) to visualize your Mem history and supercharge existing GitHub repos
 
 
 <div align="center">
@@ -15,7 +17,7 @@ It's your coding partner: helping you debug faster, share context in real time, 
 ## Features
 
 - 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
-- 🐞 **Intelligent debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixes
+- 🐞 **Context-aware debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
 - 🤝 **Team context sharing**: Real-time alignment with zero friction  
 - ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature  
 - 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops  

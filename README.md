@@ -1,6 +1,9 @@
 # Mem MCP Server
 
-Mem MCP Server gives coding agents Git-like memory: prompt-aware snapshots, context lifecycle helpers, and seamless integration with IDEs or agents.
+Mem gives coding agents beyond-Git memory: capturing prompts, AI plans, and code changes with zero-friction context management.
+
+It's your coding partner: helping you debug faster, share context in real time, reuse edits, prevent runaway agentic loops, and learn from history.
+
 
 <div align="center">
 
@@ -11,8 +14,8 @@ Mem MCP Server gives coding agents Git-like memory: prompt-aware snapshots, cont
 
 ## Features
 
-- 📒 **Git-like memory**: Automatically capture user prompts, agent plans, and code changes  
-- 🐞 **Error-aware debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixes
+- 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
+- 🐞 **Intelligent debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixes
 - 🤝 **Team context sharing**: Real-time alignment with zero friction  
 - ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature  
 - 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops  

@@ -1,6 +1,11 @@
-# Mov - Memov MCP Server Manager
+# Mem MCP Server
 
-A powerful command-line tool for managing Memov MCP (Model Context Protocol) servers in the background.
+Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.  
+As your **coding partner**, it accelerates debugging, shares context in real time, reuses edits, prevents agentic infinite loops, and turns history into learning.  
+
+- 💬 [Join our Discord](https://discord.gg/YCN75dTh) and dive into smarter context engineering
+- 🌐 [Visit memov.im](https://memov.im) to visualize your Mem history and supercharge existing GitHub repos
+
 
 <div align="center">
 
@@ -11,262 +16,189 @@ A powerful command-line tool for managing Memov MCP (Model Context Protocol) ser
 
 ## Features
 
-- 🚀 **Easy Server Management**: Start, stop, and monitor MCP servers with simple commands
-- 📁 **Workspace Monitoring**: Monitor specific project directories for AI-assisted development
-- 🔄 **Background Operation**: Servers run in the background, freeing up your terminal
-- 📊 **Status Monitoring**: Real-time status with uptime, memory usage, and health checks
-- 📋 **Log Management**: Comprehensive logging and log viewing capabilities
-- 🎯 **Multiple Servers**: Run multiple servers for different workspaces simultaneously
+- 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
+- 🐞 **Context-aware debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
+- 🤝 **Team context sharing**: Real-time alignment with zero friction  
+- ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature  
+- 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops  
+- 🔍 **History-driven optimization**: Use past records and failed generations as reference context to boost future outputs
+
+## MCP Tools
+
+These are available to MCP clients through the server:
+
+- `set_user_context(user_prompt: str, session_id?: str)`
+  - Set the exact user request at the beginning of a task. Must be called before recording changes.
+
+- `mem_snap(files_changed: str)`
+  - Create a mem snapshot tied to the previously set user prompt. Handles untracked vs modified files intelligently. Argument is a comma-separated list of relative paths.
+
+- `clean_user_context()`
+  - Clear the stored context after finishing a task to avoid leakage across interactions.
+
+- `GET /health`
+  - Returns "OK". Useful for IDE/agent readiness checks.
+
+## Requirements
+
+- Python 3.11+
+- `uv` (for fast, isolated execution)
 
 ## Installation
 
-### Prerequisites
+Clone the repo and install dependencies via `uv`:
 
-- Python 3.10 or higher
-- Poetry (for dependency management)
-
-### Setup
-
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd mem-mcp
+cd /home/wzby/mem-mcp-server
+uv sync
 ```
 
-2. Install dependencies:
-```bash
-poetry install
-```
+This project exposes two console scripts:
 
-3. The `mov` command is now available via Poetry:
+- `mem-mcp-server` → CLI manager (`mem_mcp_server.cli.server_cli:main`)
+- `mem-mcp-launcher` → Launcher (`mem_mcp_server.server.mcp_launcher:main`)
+
+You can run them with `uv run` without a global install:
+
 ```bash
-poetry run mov --help
+uv run mem-mcp-server --help | cat
+uv run mem-mcp-launcher --help | cat
 ```
 
 ## Quick Start
 
-### Start a Server
-
-Start monitoring a workspace directory:
+### Start a server (HTTP)
 
 ```bash
-poetry run mov start --workspace /path/to/your/project --port 8080
+uv run mem-mcp-server start --workspace /path/to/project --port 8080 --host 127.0.0.1
 ```
 
-### Check Status
+Output includes the MCP URL and health endpoint:
+- MCP: `http://127.0.0.1:8080/mcp`
+- Health: `http://127.0.0.1:8080/health`
 
-View all running servers:
+### Check status
 
 ```bash
-poetry run mov status
+uv run mem-mcp-server status | cat
 ```
 
-### Stop a Server
+### Stop servers
 
-Stop a specific server:
+- Stop a specific server:
 
 ```bash
-poetry run mov stop --workspace /path/to/your/project --port 8080
+uv run mem-mcp-server stop --workspace /path/to/project --port 8080
 ```
 
-Stop all servers:
+- Stop all servers for a workspace:
 
 ```bash
-poetry run mov stop --all
+uv run mem-mcp-server stop --workspace /path/to/project
 ```
 
-## Command Reference
-
-### `mov start`
-
-Start a new MCP server in the background.
+- Stop all servers on a port:
 
 ```bash
-mov start --workspace <path> --port <port> [--host <host>]
+uv run mem-mcp-server stop --port 8080
 ```
 
-**Options:**
-- `--workspace`: Path to the project directory to monitor (required)
-- `--port`: Port number to run the server on (required)
-- `--host`: Host to bind to (default: 127.0.0.1)
-
-**Example:**
-```bash
-poetry run mov start --workspace /home/user/my-project --port 8080
-```
-
-### `mov stop`
-
-Stop running server(s).
+- Stop everything:
 
 ```bash
-mov stop [--workspace <path>] [--port <port>] [--all]
+uv run mem-mcp-server stop --all
 ```
 
-**Options:**
-- `--workspace`: Stop all servers for this workspace
-- `--port`: Stop all servers on this port
-- `--all`: Stop all running servers
+## Launcher (advanced)
 
-**Examples:**
-```bash
-# Stop specific server
-poetry run mov stop --workspace /home/user/my-project --port 8080
+You can launch the MCP runtime directly with the launcher.
 
-# Stop all servers for a workspace
-poetry run mov stop --workspace /home/user/my-project
-
-# Stop all servers on a port
-poetry run mov stop --port 8080
-
-# Stop all servers
-poetry run mov stop --all
-```
-
-### `mov status`
-
-Show status of all running servers.
+- HTTP mode:
 
 ```bash
-mov status
+uv run mem-mcp-launcher http /path/to/project --host 127.0.0.1 --port 8080
 ```
 
-**Output includes:**
-- Server status (running/dead)
-- Workspace path
-- MCP URL
-- Uptime
-- Memory usage
-- Process ID
+- stdio mode (for tools like Claude Desktop):
 
+```bash
+uv run mem-mcp-launcher stdio /path/to/project
+```
 
-## Configuration
+Logs are written to `~/.mem_mcp_server/logs/`.
 
-Mov stores its configuration and logs in `~/.mov/`:
+## Configuration and Logs
+
+Default config directory: `~/.mem_mcp_server`
 
 ```
-~/.mov/
+~/.mem_mcp_server/
 ├── servers.json    # Server registry and status
 └── logs/           # Server log files
-    ├── project1_8080.log
-    └── project2_8081.log
 ```
 
-## Integration with AI Tools
+## Integrations
 
-### Cursor Integration
+- **Cursor**:
+  1. Start a server for your workspace (see Quick Start)
+  2. In Cursor Settings → Extensions → MCP, add a new server with URL `http://127.0.0.1:8080/mcp`
 
-1. Start a Mov server:
-```bash
-poetry run mov start --workspace /path/to/project --port 8080
-```
-
-2. In Cursor, go to Settings → Extensions → MCP
-3. Add a new MCP server with URL: `http://127.0.0.1:8080/mcp`
-
-### Claude Desktop Integration
-
-1. Start a Mov server:
-```bash
-poetry run mov start --workspace /path/to/project --port 8080
-```
-
-2. Configure Claude Desktop to use the MCP server URL
+- **Claude Desktop**:
+  - Use `mem-mcp-launcher stdio /path/to/project` and configure Claude Desktop to start that script in stdio mode
 
 ## Development
 
-### Project Structure
+### Project layout
 
 ```
-mem-mcp/
-├── memov_mcp/                      # Main package
+mem_mcp_server/
+├── __init__.py
+├── globals.py                 # ~/.mem_mcp_server path
+├── cli/
 │   ├── __init__.py
-│   ├── cli/
-│   │   ├── __init__.py
-│   │   ├── mov_cli.py              # Main CLI interface
-│   │   └── mov_logger.py           # Log management
-│   ├── server/
-│   │   ├── __init__.py
-│   │   ├── mcp_server.py           # Core MCP server implementation
-│   │   ├── mcp_http_server.py      # HTTP wrapper for MCP server
-│   │   └── start_mcp.py            # MCP server launcher
-│   └── utils/
-│       └── __init__.py
-├── tests/                          # Test files
-├── docs/                           # Documentation
-├── pyproject.toml                  # Project configuration
-└── README.md                       # This file
+│   └── server_cli.py          # mem-mcp-server CLI
+└── server/
+    ├── __init__.py
+    ├── mcp_server.py          # FastMCP tools and routes
+    └── mcp_launcher.py        # mem-mcp-launcher entry
 ```
 
-### Running Tests
+### Setup
 
 ```bash
-poetry run pytest
+uv sync
 ```
 
-### Code Formatting
+### Lint/format (if configured)
 
 ```bash
-poetry run black .
-poetry run isort .
+uv run black .
+uv run isort .
 ```
 
-### Pre-commit Hooks
+### Run tests (if present)
 
 ```bash
-poetry run pre-commit run --all-files
+uv run pytest
 ```
+
+## Notes on MCP tools provided
+
+The server exposes tools like `set_user_context`, `mem_snap`, and `clean_user_context` via FastMCP, and a `/health` endpoint.
 
 ## Troubleshooting
 
-### Server Won't Start
-
-1. Check if the port is already in use:
-```bash
-netstat -tulpn | grep :8080
-```
-
-2. Verify the workspace path exists and is accessible
-
-3. Check logs for error messages:
-```bash
-poetry run mov logs --workspace /path/to/project --port 8080
-```
-
-### Server Shows as "Dead"
-
-1. Check if the process is actually running:
-```bash
-ps aux | grep start_mcp.py
-```
-
-2. Restart the server:
-```bash
-poetry run mov stop --workspace /path/to/project --port 8080
-poetry run mov start --workspace /path/to/project --port 8080
-```
-
-### Permission Issues
-
-Ensure you have write permissions to:
-- The workspace directory
-- `~/.mov/` configuration directory
+- Port already in use: choose another port or stop the existing server.
+- No servers listed by `status`: ensure you started via `mem-mcp-server start`.
+- Logs: check `~/.mem_mcp_server/logs/` for the latest log.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License. See `LICENSE`.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## Support
-
-For issues and questions:
-- Check the troubleshooting section
-- Review the logs for error messages
-- Open an issue on GitHub
+3. Make changes with tests where applicable
+4. Open a PR

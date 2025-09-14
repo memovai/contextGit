@@ -1,7 +1,7 @@
 # Mem MCP Server
 
-Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.  
-As your **coding partner**, it accelerates debugging, shares context in real time, reuses edits, prevents agentic infinite loops, and turns history into learning.  
+Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.
+As your **coding partner**, it accelerates debugging, shares context in real time, reuses edits, prevents agentic infinite loops, and turns history into learning.
 
 - 💬 [Join our Discord](https://discord.gg/YCN75dTh) and dive into smarter context engineering
 - 🌐 [Visit memov.im](https://memov.im) to visualize your Mem history and supercharge existing GitHub repos
@@ -18,9 +18,9 @@ As your **coding partner**, it accelerates debugging, shares context in real tim
 
 - 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
 - 🐞 **Context-aware debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
-- 🤝 **Team context sharing**: Real-time alignment with zero friction  
-- ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature  
-- 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops  
+- 🤝 **Team context sharing**: Real-time alignment with zero friction
+- ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature
+- 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops
 - 🔍 **History-driven optimization**: Use past records and failed generations as reference context to boost future outputs
 
 ## MCP Tools
@@ -39,30 +39,53 @@ These are available to MCP clients through the server:
 - `GET /health`
   - Returns "OK". Useful for IDE/agent readiness checks.
 
-## Requirements
 
-- Python 3.11+
-- `uv` (for fast, isolated execution)
+## Development Setup
 
-## Installation
+### Prerequisites
 
-Clone the repo and install dependencies via `uv`:
+- **Python 3.11+** - Required for all functionality
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** - Modern Python package and project manager
 
+### Quick Setup
+
+1. **Clone and install dependencies:**
+   ```bash
+   git clone git@github.com:memovai/mem-mcp-server.git
+   cd mem-mcp-server
+   uv sync
+   ```
+
+2. **Set up development tools:**
+   ```bash
+   uv pip install pre-commit
+   uv run pre-commit install
+   ```
+
+3. **Optional: Link core memory package** (for advanced development):
+   ```bash
+   # Clone the core mem package
+   cd ..
+   git clone git@github.com:memovai/mem.git
+
+   # Install as editable dependency
+   cd mem-mcp-server
+   pip install -e ../mem
+   ```
+
+### Available Commands
+
+The project provides two main entry points:
+
+| Command | Purpose | Module |
+|---------|---------|---------|
+| `mem-mcp-server` | Server management CLI | `mem_mcp_server.cli.server_cli:main` |
+| `mem-mcp-launcher` | Direct MCP runtime launcher | `mem_mcp_server.server.mcp_launcher:main` |
+
+**Run commands without global installation:**
 ```bash
-cd /home/wzby/mem-mcp-server
-uv sync
-```
-
-This project exposes two console scripts:
-
-- `mem-mcp-server` → CLI manager (`mem_mcp_server.cli.server_cli:main`)
-- `mem-mcp-launcher` → Launcher (`mem_mcp_server.server.mcp_launcher:main`)
-
-You can run them with `uv run` without a global install:
-
-```bash
-uv run mem-mcp-server --help | cat
-uv run mem-mcp-launcher --help | cat
+uv run mem-mcp-server --help
+uv run mem-mcp-launcher --help
 ```
 
 ## Quick Start

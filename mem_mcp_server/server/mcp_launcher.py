@@ -23,9 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 def mcp_launcher(
     mode: Annotated[str, typer.Argument(help="Server mode: stdio or http")],
-    project_path: Annotated[
-        str, typer.Argument(help="Path to the project directory to monitor (required)")
-    ],
+    project_path: Annotated[str, typer.Argument(help="Path to the project directory to monitor")],
     port: Annotated[int, typer.Option(help="Port for HTTP server")] = 8000,
     host: Annotated[str, typer.Option(help="Host for HTTP server")] = "127.0.0.1",
 ):

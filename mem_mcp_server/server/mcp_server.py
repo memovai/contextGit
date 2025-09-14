@@ -31,6 +31,7 @@ class MemMCPTools:
     _project_path = None
     _user_context = {
         "current_prompt": None,
+        "current_response": None,
         "timestamp": None,
         "session_id": None,
         # Indicates if the context has been cleaned, it should be reset after each interaction with the agent
@@ -51,26 +52,57 @@ class MemMCPTools:
     # Basic MCP tools
     @staticmethod
     @mcp.tool()
-    def set_user_context(user_prompt: str, session_id: str | None = None) -> str:
+    def set_user_context(
+        user_prompt: str, agent_response: str, session_id: str | None = None
+    ) -> str:
         """
         Set the current user context for automatic tracking.
 
-        **IMPORTANT: Call this tool FIRST when user makes any request.**
+        **CRITICAL TIMING: This tool must be called AFTER all file modifications are completely finished,
+        but IMMEDIATELY BEFORE calling mem_snap. Do NOT call this at the beginning of agent response.**
+
+        **Correct workflow sequence:**
+        1. Agent performs all required file modifications/changes
+        2. Agent completes all coding tasks
+        3. **THEN call set_user_context** (with original user prompt + agent's complete response)
+        4. **THEN call mem_snap** to record the changes
 
         **When to use this tool:**
-        - At the beginning of any coding task
-        - When user asks to modify, create, or delete files
-        - When user requests new features or bug fixes
-        - Before starting any development work
+        - After ALL file modifications and code changes are 100% complete
+        - As the immediate step before calling mem_snap
+        - When all user requirements have been fulfilled and you're ready to record
+        - Never at the start of agent response - only at the end before recording
 
-        **Example usage:**
+        **Example workflow:**
         User: "Modify the content of 1.txt to become 2"
-        → First call: set_user_context("Modify the content of 1.txt to become 2")
-        → Then: perform the file modification
-        → Finally: auto_mem_snap("1.txt")
+        → Step 1: Agent performs the file modification (writes "2" to 1.txt)
+        → Step 2: Agent completes any additional tasks
+        → Step 3: set_user_context("Modify the content of 1.txt to become 2", complete_agent_response)
+        → Step 4: mem_snap("1.txt")
 
         Args:
             user_prompt: The user's exact original prompt/request
+            agent_response: The AI agent's response to be recorded. Should follow this structured format:
+                ---
+                [Agent Plan]
+                - Briefly summarize the internal reasoning and planned steps the AI just took
+                - Focus on logic and intent, not a verbatim trace
+
+                [AI Reply]
+                - Record the full response exactly as it was given to the user
+                - Include all text or structured content from the response
+                ---
+
+                Example:
+                    ---
+                    [Agent Plan]
+                    Analyzed user request to optimize code documentation. Identified unclear sections
+                    and formatting issues. Planned to improve clarity and structure.
+
+                    [AI Reply]
+                    I've optimized the docstring by fixing formatting issues, improving clarity,
+                    and providing better examples for the structured response format.
+                    ---
             session_id: Optional session identifier
 
         Returns:
@@ -84,9 +116,10 @@ class MemMCPTools:
                 raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
 
             LOGGER.info(
-                f"set_user_context called with: user_prompt='{user_prompt}', session_id='{session_id}'"
+                f"set_user_context called with: user_prompt='{user_prompt}', response='{agent_response}', session_id='{session_id}'"
             )
             MemMCPTools._user_context["current_prompt"] = user_prompt
+            MemMCPTools._user_context["current_response"] = agent_response
             MemMCPTools._user_context["timestamp"] = time.time()
             MemMCPTools._user_context["session_id"] = session_id or str(int(time.time()))
             MemMCPTools._user_context["context_cleaned"] = False
@@ -120,6 +153,7 @@ class MemMCPTools:
         try:
             LOGGER.info("clean_user_context called")
             MemMCPTools._user_context["current_prompt"] = None
+            MemMCPTools._user_context["current_response"] = None
             MemMCPTools._user_context["timestamp"] = None
             MemMCPTools._user_context["session_id"] = None
             MemMCPTools._user_context["context_cleaned"] = True
@@ -186,8 +220,9 @@ class MemMCPTools:
 
             # Prepare the variables
             prompt = MemMCPTools._user_context["current_prompt"]
+            agent_response = MemMCPTools._user_context["current_response"]
             memov_manager = MemovManager(project_path=MemMCPTools._project_path)
-            LOGGER.info(f"Using prompt: {prompt}")
+            LOGGER.info(f"Using prompt: {prompt}, response: {agent_response}")
 
             # Step 1: Check if Memov is initialized
             if (check_status := memov_manager.check()) is MemStatus.SUCCESS:
@@ -211,7 +246,10 @@ class MemMCPTools:
                 for untracked_file in current_file_status["untracked"]:
                     if file_changed_Path.samefile(untracked_file):
                         track_status = memov_manager.track(
-                            [str(file_changed_Path)], prompt=prompt, by_user=False
+                            [str(file_changed_Path)],
+                            prompt=prompt,
+                            response=agent_response,
+                            by_user=False,
                         )
                         if track_status is not MemStatus.SUCCESS:
                             LOGGER.error(
@@ -222,7 +260,7 @@ class MemMCPTools:
                         break
                 else:
                     snap_status = memov_manager.snapshot(
-                        prompt=prompt, response=None, by_user=False
+                        prompt=prompt, response=agent_response, by_user=False
                     )
                     if snap_status is not MemStatus.SUCCESS:
                         LOGGER.error(

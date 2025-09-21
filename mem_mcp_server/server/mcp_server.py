@@ -12,7 +12,6 @@ License: MIT
 
 import logging
 import os
-import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -49,122 +48,6 @@ class MemMCPTools:
         # Start the FastMCP server
         MemMCPTools.mcp.run(*args, **kwargs)
 
-    # Basic MCP tools
-    @staticmethod
-    @mcp.tool()
-    def set_user_context(
-        user_prompt: str, agent_response: str, session_id: str | None = None
-    ) -> str:
-        """
-        Set the current user context for automatic tracking.
-
-        **CRITICAL TIMING: This tool must be called AFTER all file modifications are completely finished,
-        but IMMEDIATELY BEFORE calling mem_snap. Do NOT call this at the beginning of agent response.**
-
-        **Correct workflow sequence:**
-        1. Agent performs all required file modifications/changes
-        2. Agent completes all coding tasks
-        3. **THEN call set_user_context** (with original user prompt + agent's complete response)
-        4. **THEN call mem_snap** to record the changes
-
-        **When to use this tool:**
-        - After ALL file modifications and code changes are 100% complete
-        - As the immediate step before calling mem_snap
-        - When all user requirements have been fulfilled and you're ready to record
-        - Never at the start of agent response - only at the end before recording
-
-        **Example workflow:**
-        User: "Modify the content of 1.txt to become 2"
-        → Step 1: Agent performs the file modification (writes "2" to 1.txt)
-        → Step 2: Agent completes any additional tasks
-        → Step 3: set_user_context("Modify the content of 1.txt to become 2", complete_agent_response)
-        → Step 4: mem_snap("1.txt")
-
-        Args:
-            user_prompt: The user's exact original prompt/request
-            agent_response: The AI agent's response to be recorded. Should follow this structured format:
-                ---
-                [Agent Plan]
-                - Briefly summarize the internal reasoning and planned steps the AI just took
-                - Focus on logic and intent, not a verbatim trace
-
-                [AI Reply]
-                - Record the full response exactly as it was given to the user
-                - Include all text or structured content from the response
-                ---
-
-                Example:
-                    ---
-                    [Agent Plan]
-                    Analyzed user request to optimize code documentation. Identified unclear sections
-                    and formatting issues. Planned to improve clarity and structure.
-
-                    [AI Reply]
-                    I've optimized the docstring by fixing formatting issues, improving clarity,
-                    and providing better examples for the structured response format.
-                    ---
-            session_id: Optional session identifier
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            if MemMCPTools._project_path is None:
-                raise ValueError(f"Project path is not set.")
-
-            if not os.path.exists(MemMCPTools._project_path):
-                raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
-
-            LOGGER.info(
-                f"set_user_context called with: user_prompt='{user_prompt}', response='{agent_response}', session_id='{session_id}'"
-            )
-            MemMCPTools._user_context["current_prompt"] = user_prompt
-            MemMCPTools._user_context["current_response"] = agent_response
-            MemMCPTools._user_context["timestamp"] = time.time()
-            MemMCPTools._user_context["session_id"] = session_id or str(int(time.time()))
-            MemMCPTools._user_context["context_cleaned"] = False
-
-            result = (
-                f"✅ User context set: {user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}"
-            )
-            LOGGER.info(f"set_user_context result: {result}")
-            return result
-        except Exception as e:
-            LOGGER.error(f"Error in set_user_context: {e}", exc_info=True)
-            return f"❌ Error setting user context: {str(e)}"
-
-    @staticmethod
-    @mcp.tool()
-    def clean_user_context() -> str:
-        """
-        Clean the current user context after each interaction with the agent.
-
-        **IMPORTANT: Call this tool AFTER completing any file modifications, code changes,
-        or task completion to reset the user context.**
-
-        **When to use this tool:**
-        - After the user has completed their request
-        - After recording changes using auto_mem_snap or similar tools
-        - To ensure no stale context is carried over to the next interaction
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            LOGGER.info("clean_user_context called")
-            MemMCPTools._user_context["current_prompt"] = None
-            MemMCPTools._user_context["current_response"] = None
-            MemMCPTools._user_context["timestamp"] = None
-            MemMCPTools._user_context["session_id"] = None
-            MemMCPTools._user_context["context_cleaned"] = True
-
-            result = "✅ User context cleaned successfully"
-            LOGGER.info(f"clean_user_context result: {result}")
-            return result
-        except Exception as e:
-            LOGGER.error(f"Error in clean_user_context: {e}", exc_info=True)
-            return f"❌ Error cleaning user context: {str(e)}"
-
     @mcp.custom_route("/health", methods=["GET"])
     async def health(_req: Request) -> PlainTextResponse:
         return PlainTextResponse("OK")
@@ -172,11 +55,10 @@ class MemMCPTools:
     # Core MCP tools for intelligent memov integration
     @staticmethod
     @mcp.tool()
-    def mem_snap(files_changed: str) -> str:
-        """Automatically create a mem snap using the stored user context with intelligent workflow.
+    def snap(user_prompt: str, original_response: str, files_changed: str) -> str:
+        """Automatically create a mem snap using the user prompt, the agent response, and the changed files with intelligent workflow.
 
-        **IMPORTANT: Call this tool AFTER completing any file modifications, code changes,
-        or task completion to automatically record the user's request and track changed files.**
+        **IMPORTANT: Call this tool at the END of the agent's response to automatically record the request, response, and track changed files.**
 
         **Intelligent Workflow:**
         1. **Auto-initialize** - Creates memov repository if it doesn't exist
@@ -187,19 +69,31 @@ class MemMCPTools:
         4. **No conflicts** - Avoids redundant operations
 
         **When to use this tool:**
-        - After modifying, creating, or deleting files
-        - After completing user's coding requests
-        - After making configuration changes
-        - After completing any development task
+        - At the END of the agent's response, after all file changes are complete
 
         **When NOT to use this tool:**
         - For read-only operations (viewing files, searching)
         - For informational queries
-        - Before making changes (use set_user_context first)
         - **After rename operations** - `mem rename` already handles the recording
         - **After remove operations** - `mem remove` already handles the recording
 
         Args:
+            user_prompt: The user's exact original prompt/request
+            original_response: The exact original full response from the AI agent
+                Example:
+                    Chat content:
+                        [User Prompt]: Change the print statement in hello.py to "Hello World"
+                        [AI Response]: I can see that the file currently shows "Hello Earth" but you mentioned the edits were undone. Let me check the current content of the file to see what needs to be changed. I can see the file currently has "Hello Earth". I'll change it back to "Hello World" as requested.
+                        ```
+                        Made changes.
+                        ```
+                        I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
+                    original_response:
+                        I can see that the file currently shows "Hello Earth" but you mentioned the edits were undone. Let me check the current content of the file to see what needs to be changed. I can see the file currently has "Hello Earth". I'll change it back to "Hello World" as requested.
+                        ```
+                        Made changes.
+                        ```
+                        I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
             files_changed: Comma-separated relative path list of files that were modified/created/deleted (e.g. "file1.py,module1/file2.py")
 
         Returns:
@@ -209,20 +103,16 @@ class MemMCPTools:
             LOGGER.info(
                 f"auto_mem_snap called with: files_changed='{files_changed}', project_path='{MemMCPTools._project_path}'"
             )
+            LOGGER.info(f"Using prompt: {user_prompt}, response: {original_response}")
 
-            if (
-                not MemMCPTools._user_context["current_prompt"]
-                or MemMCPTools._user_context["context_cleaned"]
-            ):
-                result = "❌ No user context available. Please set user context first using set_user_context."
-                LOGGER.warning(result)
-                return result
+            if MemMCPTools._project_path is None:
+                raise ValueError(f"Project path is not set.")
+
+            if not os.path.exists(MemMCPTools._project_path):
+                raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
 
             # Prepare the variables
-            prompt = MemMCPTools._user_context["current_prompt"]
-            agent_response = MemMCPTools._user_context["current_response"]
             memov_manager = MemovManager(project_path=MemMCPTools._project_path)
-            LOGGER.info(f"Using prompt: {prompt}, response: {agent_response}")
 
             # Step 1: Check if Memov is initialized
             if (check_status := memov_manager.check()) is MemStatus.SUCCESS:
@@ -247,8 +137,8 @@ class MemMCPTools:
                     if file_changed_Path.samefile(untracked_file):
                         track_status = memov_manager.track(
                             [str(file_changed_Path)],
-                            prompt=prompt,
-                            response=agent_response,
+                            prompt=user_prompt,
+                            response=original_response,
                             by_user=False,
                         )
                         if track_status is not MemStatus.SUCCESS:
@@ -260,7 +150,7 @@ class MemMCPTools:
                         break
                 else:
                     snap_status = memov_manager.snapshot(
-                        prompt=prompt, response=agent_response, by_user=False
+                        prompt=user_prompt, response=original_response, by_user=False
                     )
                     if snap_status is not MemStatus.SUCCESS:
                         LOGGER.error(
@@ -272,7 +162,8 @@ class MemMCPTools:
 
             # Build detailed result message
             result_parts = ["✅ Auto operation completed successfully"]
-            result_parts.append(f"📝 Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+            result_parts.append(f"📝 Prompt: {user_prompt}")
+            result_parts.append(f"🗂️ Original Response: {original_response}")
             result_parts.append(f"📂 File changed: {files_changed}")
             result = "\n".join(result_parts)
             LOGGER.info(f"Operation completed successfully: {result}")
@@ -290,7 +181,6 @@ def main():
     import asyncio
 
     mem_mcp_tools = MemMCPTools("D:/Projects/temp")
-    asyncio.run(mem_mcp_tools.mcp.call_tool("set_user_context", {"user_prompt": "123"}))
     asyncio.run(mem_mcp_tools.mcp.call_tool("mem_snap", {"files_changed": "123.py"}))
 
 

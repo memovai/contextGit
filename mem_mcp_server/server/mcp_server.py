@@ -55,8 +55,10 @@ class MemMCPTools:
     # Core MCP tools for intelligent memov integration
     @staticmethod
     @mcp.tool()
-    def snap(user_prompt: str, original_response: str, files_changed: str) -> str:
-        """Automatically create a mem snap using the user prompt, the agent response, and the changed files with intelligent workflow.
+    def snap(
+        user_prompt: str, original_response: str, agent_plan: list[str], files_changed: str
+    ) -> str:
+        """Automatically create a mem snap using the user prompt, the agent response, the agent plan and the changed files with intelligent workflow.
 
         **IMPORTANT: Call this tool at the END of the agent's response to automatically record the request, response, and track changed files.**
 
@@ -80,6 +82,9 @@ class MemMCPTools:
         Args:
             user_prompt: The user's exact original prompt/request
             original_response: The exact original full response from the AI agent
+                Note:
+                    - Make sure to include the entire response, including any code blocks or explanations.
+
                 Example:
                     Chat content:
                         [User Prompt]: Change the print statement in hello.py to "Hello World"
@@ -94,6 +99,34 @@ class MemMCPTools:
                         Made changes.
                         ```
                         I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
+            agent_plan: The summarized reasoning and action plan the AI took to arrive at the response
+                Notes:
+                    - Provide a concise, step-by-step outline of the reasoning and planned actions the AI just took.
+                    - Write it as a JSON object called "planning_strategy", where each key is "plan1", "plan2", etc., and each value is a short descriptive sentence of the step.
+                    - The steps do not need to follow a strict setup/implementation/testing order; focus instead on the actual reasoning path the AI used in this response.
+
+                Format:
+                    [
+                        <first reasoning step>,
+                        <second reasoning step>,
+                        <third reasoning step>
+                    ]
+
+                Example:
+                    Chat content:
+                        [User Prompt]: Change the print statement in hello.py to "Hello World"
+                        [AI Response]: I can see that the file currently shows "Hello Earth" but you mentioned the edits were undone. Let me check the current content of the file to see what needs to be changed. I can see the file currently has "Hello Earth". I'll change it back to "Hello World" as requested.
+                        ```
+                        Made changes.
+                        ```
+                        I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
+                    agent_plan:
+                        [
+                            "Reviewed the current content of hello.py to identify the existing print statement.",
+                            "Identified the need to change 'Hello Earth' back to 'Hello World'.",
+                            "Updated the print statement and comments in hello.py accordingly."
+                        ]
+
             files_changed: Comma-separated relative path list of files that were modified/created/deleted (e.g. "file1.py,module1/file2.py")
 
         Returns:
@@ -103,13 +136,25 @@ class MemMCPTools:
             LOGGER.info(
                 f"auto_mem_snap called with: files_changed='{files_changed}', project_path='{MemMCPTools._project_path}'"
             )
-            LOGGER.info(f"Using prompt: {user_prompt}, response: {original_response}")
+            LOGGER.info(
+                f"Using prompt: {user_prompt}, response: {original_response}, plan: {agent_plan}"
+            )
 
             if MemMCPTools._project_path is None:
                 raise ValueError(f"Project path is not set.")
 
             if not os.path.exists(MemMCPTools._project_path):
                 raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
+
+            # Concatenate the agent plan into the original response for full context
+            agent_plan = {"plan" + str(i + 1): plan_step for i, plan_step in enumerate(agent_plan)}
+            full_response = (
+                "[Agent Plan]:\n"
+                + '"planning_strategy": '
+                + str(agent_plan)
+                + "\n\n[Agent Response]:\n"
+                + original_response
+            )
 
             # Prepare the variables
             memov_manager = MemovManager(project_path=MemMCPTools._project_path)
@@ -138,7 +183,7 @@ class MemMCPTools:
                         track_status = memov_manager.track(
                             [str(file_changed_Path)],
                             prompt=user_prompt,
-                            response=original_response,
+                            response=full_response,
                             by_user=False,
                         )
                         if track_status is not MemStatus.SUCCESS:
@@ -150,7 +195,7 @@ class MemMCPTools:
                         break
                 else:
                     snap_status = memov_manager.snapshot(
-                        prompt=user_prompt, response=original_response, by_user=False
+                        prompt=user_prompt, response=full_response, by_user=False
                     )
                     if snap_status is not MemStatus.SUCCESS:
                         LOGGER.error(
@@ -163,7 +208,7 @@ class MemMCPTools:
             # Build detailed result message
             result_parts = ["✅ Auto operation completed successfully"]
             result_parts.append(f"📝 Prompt: {user_prompt}")
-            result_parts.append(f"🗂️ Original Response: {original_response}")
+            result_parts.append(f"🗂️ Original Response: {full_response}")
             result_parts.append(f"📂 File changed: {files_changed}")
             result = "\n".join(result_parts)
             LOGGER.info(f"Operation completed successfully: {result}")

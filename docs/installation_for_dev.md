@@ -29,7 +29,7 @@
 
    # Install as editable dependency
    cd mem-mcp-server
-   pip install -e ../mem
+   uv pip install -e ../mem
    ```
 
 ## Available Commands

@@ -71,3 +71,11 @@
         }
       }
     }
+    ```
+
+
+    **Claude Code:** Run the following command in your terminal to add the MCP server:
+    > Note: Make sure you are in your project root directory when running this command, like where your `.git` folder is located.
+    ```bash
+    claude mcp add mem-mcp --scope project -- uvx --from git+https://github.com/memovai/mem-mcp-server.git mem-mcp-launcher stdio $(pwd)
+    ```

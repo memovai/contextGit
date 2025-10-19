@@ -24,6 +24,9 @@ package = true
 [tool.uv.sources]
 memov = { git = "https://github.com/memovai/mem.git" }
 
+[tool.setuptools]
+packages = ["mem_mcp_server"]
+
 [tool.black]
 line-length = 100
 target-version = ['py310']

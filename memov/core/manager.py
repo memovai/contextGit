@@ -30,7 +30,10 @@ class MemStatus(Enum):
 
 class MemovManager:
     def __init__(
-        self, project_path: str, default_name: Optional[str] = None, default_email: Optional[str] = None
+        self,
+        project_path: str,
+        default_name: Optional[str] = None,
+        default_email: Optional[str] = None,
     ) -> None:
         """Initialize the MemovManager."""
         self.project_path = project_path
@@ -116,7 +119,9 @@ class MemovManager:
                 self.bare_repo_path, "refs/memov/HEAD", verbose=False
             )
             if not head_commit:  # If HEAD commit does not exist, try to get the main branch commit
-                head_commit = GitManager.get_commit_id_by_ref(self.bare_repo_path, "main", verbose=False)
+                head_commit = GitManager.get_commit_id_by_ref(
+                    self.bare_repo_path, "main", verbose=False
+                )
             if not head_commit:  # If still no commit, set to None
                 head_commit = None
 
@@ -132,7 +137,9 @@ class MemovManager:
             new_files = self._filter_new_files(file_paths, tracked_file_rel_paths)
 
             if len(new_files) == 0:
-                LOGGER.warning("No new files to track. All provided files are already tracked or ignored.")
+                LOGGER.warning(
+                    "No new files to track. All provided files are already tracked or ignored."
+                )
                 return MemStatus.SUCCESS
 
             # Build tree_entries, including all tracked_files and new files
@@ -144,7 +151,9 @@ class MemovManager:
 
             commit_msg = "Track files\n\n"
             commit_msg += f"Files: {', '.join([rel_file for rel_file, _ in new_files])}\n"
-            commit_msg += f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            commit_msg += (
+                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            )
 
             commit_hash = self._commit(commit_msg, all_files)
             if not commit_hash:
@@ -193,7 +202,9 @@ class MemovManager:
 
             # Commit to the bare repo
             commit_msg = "Create snapshot\n\n"
-            commit_msg += f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            commit_msg += (
+                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            )
             commit_file_paths = {}
             for rel_path, abs_path in zip(tracked_file_rel_paths, tracked_file_abs_paths):
                 commit_file_paths[rel_path] = abs_path
@@ -243,7 +254,9 @@ class MemovManager:
                 tracked_files, _ = GitManager.get_files_by_commit(self.bare_repo_path, head_commit)
 
             if old_rel_path not in tracked_files:
-                LOGGER.warning(f"{Color.RED}File {old_rel_path} is not tracked, cannot rename.{Color.RESET}")
+                LOGGER.warning(
+                    f"{Color.RED}File {old_rel_path} is not tracked, cannot rename.{Color.RESET}"
+                )
                 return
 
             # If the old file exists, rename it to the new file path
@@ -253,14 +266,18 @@ class MemovManager:
             else:
                 commit_msg = "Rename file (already renamed by user)\n\n"
             commit_msg += f"Files: {old_rel_path} -> {new_file_path}\n"
-            commit_msg += f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            commit_msg += (
+                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            )
 
             # Commit the rename in the memov repo
             file_list = self._filter_new_files([self.project_path], tracked_file_rel_paths=None)
             file_list = {rel_path: abs_path for rel_path, abs_path in file_list}
             self._commit(commit_msg, file_list)
 
-            LOGGER.info(f"Renamed file in memov repo from {old_file_path} to {new_file_path} and committed.")
+            LOGGER.info(
+                f"Renamed file in memov repo from {old_file_path} to {new_file_path} and committed."
+            )
         except Exception as e:
             LOGGER.error(f"Error renaming file in memov repo: {e}")
 
@@ -293,7 +310,9 @@ class MemovManager:
             # If the file exists, remove it from the working directory
             if os.path.exists(target_abs_path):
                 if (
-                    input(f"Are you sure you want to remove {target_abs_path}? (y/N): ").strip().lower()
+                    input(f"Are you sure you want to remove {target_abs_path}? (y/N): ")
+                    .strip()
+                    .lower()
                     != "y"
                 ):
                     LOGGER.info("File removal cancelled by user.")
@@ -304,7 +323,9 @@ class MemovManager:
                 commit_msg = "Remove file (already missing)\n\n"
 
             commit_msg += f"Files: {target_rel_path}\n"
-            commit_msg += f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            commit_msg += (
+                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+            )
 
             # Commit the removal in the memov repo
             # Get current tracked files and exclude the removed file
@@ -334,7 +355,9 @@ class MemovManager:
             # Load branches from the memov repo
             branches = self._load_branches()
             if branches is None:
-                LOGGER.error("No branches found in the memov repo. Please initialize or track files first.")
+                LOGGER.error(
+                    "No branches found in the memov repo. Please initialize or track files first."
+                )
                 return
 
             # Get the head commit of the memov repo and the branches' commit hashes
@@ -391,7 +414,9 @@ class MemovManager:
 
                     # Format prompt and response, handle None values
                     prompt_display = short_msg(prompt) if prompt and prompt != "None" else "None"
-                    response_display = short_msg(response) if response and response != "None" else "None"
+                    response_display = (
+                        short_msg(response) if response and response != "None" else "None"
+                    )
 
                     logging.info(
                         f"{operation_type.ljust(10)} {marker} {branch_str.ljust(18)} {hash7.ljust(8)} {prompt_display.ljust(15)} {response_display.ljust(15)}"
@@ -428,7 +453,9 @@ class MemovManager:
 
             # Update branch config
             self._update_branch(commit_hash, reset_current_branch=True)
-            LOGGER.info(f"Jumped to commit {commit_hash} in memov repo (HEAD updated, branches unchanged).")
+            LOGGER.info(
+                f"Jumped to commit {commit_hash} in memov repo (HEAD updated, branches unchanged)."
+            )
         except Exception as e:
             LOGGER.error(f"Error jumping to commit in memov repo: {e}")
 
@@ -437,7 +464,9 @@ class MemovManager:
         try:
             GitManager.git_show(self.bare_repo_path, commit_id)
 
-            tracked_file_rel_paths, _ = GitManager.get_files_by_commit(self.bare_repo_path, commit_id)
+            tracked_file_rel_paths, _ = GitManager.get_files_by_commit(
+                self.bare_repo_path, commit_id
+            )
             LOGGER.info(f"\nTracked files in snapshot {commit_id}:")
             for rel_path in tracked_file_rel_paths:
                 LOGGER.info(f"  {rel_path}")
@@ -453,7 +482,9 @@ class MemovManager:
                 self.bare_repo_path, "refs/memov/HEAD", verbose=False
             )
             if head_commit is None:
-                head_commit = GitManager.get_commit_id_by_ref(self.bare_repo_path, "main", verbose=False)
+                head_commit = GitManager.get_commit_id_by_ref(
+                    self.bare_repo_path, "main", verbose=False
+                )
 
             current_branch = self._load_branches().get("current")
 
@@ -528,7 +559,9 @@ class MemovManager:
                 return
             note_msg = "\n".join(note_lines)
             # Attach the note using GitManager
-            success, error_msg = GitManager.amend_commit_message(self.bare_repo_path, commit_hash, note_msg)
+            success, error_msg = GitManager.amend_commit_message(
+                self.bare_repo_path, commit_hash, note_msg
+            )
             if success:
                 LOGGER.info(f"Added note to commit {commit_hash}.")
             else:
@@ -543,10 +576,14 @@ class MemovManager:
             self._validate_and_fix_branches()
 
             # Check the git user config(name and email)
-            GitManager.ensure_git_user_config(self.bare_repo_path, self.default_name, self.default_email)
+            GitManager.ensure_git_user_config(
+                self.bare_repo_path, self.default_name, self.default_email
+            )
 
             # Write blob to bare repo and get commit hash
-            commit_hash = GitManager.write_blob_to_bare_repo(self.bare_repo_path, file_paths, commit_msg)
+            commit_hash = GitManager.write_blob_to_bare_repo(
+                self.bare_repo_path, file_paths, commit_msg
+            )
 
             # Update the branch metadata with the new commit
             self._update_branch(commit_hash)
@@ -653,7 +690,9 @@ class MemovManager:
         patterns = []
         if os.path.exists(self.memignore_path):
             with open(self.memignore_path, "r") as f:
-                patterns = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+                patterns = [
+                    line.strip() for line in f if line.strip() and not line.strip().startswith("#")
+                ]
         # Exclude .mem and .git directories by default
         patterns.append(".mem/")
         patterns.append(".git/")
@@ -665,7 +704,9 @@ class MemovManager:
         if not branches:
             return
 
-        head_commit = GitManager.get_commit_id_by_ref(self.bare_repo_path, "refs/memov/HEAD", verbose=False)
+        head_commit = GitManager.get_commit_id_by_ref(
+            self.bare_repo_path, "refs/memov/HEAD", verbose=False
+        )
 
         fixed = False
 

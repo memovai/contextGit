@@ -11,18 +11,26 @@ from memov.utils.logging_utils import setup_logging
 
 # Common type aliases
 LocOption = Annotated[
-    str, typer.Option("--loc", help="Specify the project directory path (default: current directory)")
+    str,
+    typer.Option("--loc", help="Specify the project directory path (default: current directory)"),
 ]
 PromptOption = Annotated[
     Optional[str],
-    typer.Option("-p", "--prompt", help="Descriptive prompt explaining the purpose of this operation"),
+    typer.Option(
+        "-p", "--prompt", help="Descriptive prompt explaining the purpose of this operation"
+    ),
 ]
 ResponseOption = Annotated[
     Optional[str],
-    typer.Option("-r", "--response", help="AI or user response to the prompt (optional documentation)"),
+    typer.Option(
+        "-r", "--response", help="AI or user response to the prompt (optional documentation)"
+    ),
 ]
 ByUserOption = Annotated[
-    bool, typer.Option("-u", "--by_user", help="Mark this operation as performed by a human user (vs AI)")
+    bool,
+    typer.Option(
+        "-u", "--by_user", help="Mark this operation as performed by a human user (vs AI)"
+    ),
 ]
 
 
@@ -62,7 +70,9 @@ def init(loc: LocOption = ".") -> None:
 @app.command()
 def track(
     loc: LocOption = ".",
-    file_paths: Annotated[Optional[List[str]], typer.Argument(help="List of file paths to track")] = None,
+    file_paths: Annotated[
+        Optional[List[str]], typer.Argument(help="List of file paths to track")
+    ] = None,
     prompt: PromptOption = None,
     response: ResponseOption = None,
     by_user: ByUserOption = False,

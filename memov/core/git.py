@@ -59,9 +59,13 @@ class GitManager:
             return output.stdout.strip()
         else:
             if verbose:
-                LOGGER.error(f"Failed to get commit ID for reference {ref} in repository at {repo_path}")
+                LOGGER.error(
+                    f"Failed to get commit ID for reference {ref} in repository at {repo_path}"
+                )
             else:
-                LOGGER.debug(f"Failed to get commit ID for reference {ref} in repository at {repo_path}")
+                LOGGER.debug(
+                    f"Failed to get commit ID for reference {ref} in repository at {repo_path}"
+                )
             return ""
 
     @staticmethod
@@ -111,7 +115,9 @@ class GitManager:
 
             return file_blobs
         else:
-            LOGGER.error(f"Failed to get files and blobs for commit {commit_id} in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to get files and blobs for commit {commit_id} in repository at {repo_path}"
+            )
             return {}
 
     @staticmethod
@@ -154,7 +160,9 @@ class GitManager:
             return ""
 
     @staticmethod
-    def write_blob_to_bare_repo(bare_repo: str, new_file_paths: dict[str, str], commit_msg: str) -> str:
+    def write_blob_to_bare_repo(
+        bare_repo: str, new_file_paths: dict[str, str], commit_msg: str
+    ) -> str:
         """Write a file as a blob in the bare Git repository."""
         if len(new_file_paths) == 0:
             return ""
@@ -214,7 +222,9 @@ class GitManager:
         if success and output.stdout:
             return output.stdout.strip()
         else:
-            LOGGER.error(f"Failed to get commit message for {commit_id} in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to get commit message for {commit_id} in repository at {bare_repo}"
+            )
             return ""
 
     @staticmethod
@@ -226,7 +236,9 @@ class GitManager:
         if success:
             return output.stdout
         else:
-            LOGGER.error(f"Failed to export commit {commit_id} to tar archive in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to export commit {commit_id} to tar archive in repository at {bare_repo}"
+            )
             return None
 
     @staticmethod
@@ -236,16 +248,29 @@ class GitManager:
         success, output = subprocess_call(command=command)
 
         if not success:
-            LOGGER.error(f"Failed to update ref {ref_name} to {commit_id} in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to update ref {ref_name} to {commit_id} in repository at {bare_repo}"
+            )
 
     @staticmethod
-    def amend_commit_message(repo_path: str, commit_hash: str, new_message: str) -> tuple[bool, str]:
+    def amend_commit_message(
+        repo_path: str, commit_hash: str, new_message: str
+    ) -> tuple[bool, str]:
         """
         Attach prompt/response to the commit using git notes (works on bare repos).
         Returns (success, error_message)
         """
         # Use git notes to add or overwrite the note for the commit
-        command = ["git", f"--git-dir={repo_path}", "notes", "add", "-f", "-m", new_message, commit_hash]
+        command = [
+            "git",
+            f"--git-dir={repo_path}",
+            "notes",
+            "add",
+            "-f",
+            "-m",
+            new_message,
+            commit_hash,
+        ]
         success, output = subprocess_call(command=command)
         if not success:
             LOGGER.error(f"Failed to add git note for {commit_hash}: {output.stderr}")
@@ -298,9 +323,13 @@ class GitManager:
         if set_git_config("user.name", default_name):
             LOGGER.info(f"Set git user.name to '{default_name}' in repository at {repo_path}")
         else:
-            LOGGER.error(f"Failed to set git user.name to '{default_name}' in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to set git user.name to '{default_name}' in repository at {repo_path}"
+            )
 
         if set_git_config("user.email", default_email):
             LOGGER.info(f"Set git user.email to '{default_email}' in repository at {repo_path}")
         else:
-            LOGGER.error(f"Failed to set git user.email to '{default_email}' in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to set git user.email to '{default_email}' in repository at {repo_path}"
+            )

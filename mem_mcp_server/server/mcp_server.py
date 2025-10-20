@@ -15,9 +15,10 @@ import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-from memov.core.manager import MemovManager, MemStatus
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
+
+from memov.core.manager import MemovManager, MemStatus
 
 LOGGER = logging.getLogger(__name__)
 

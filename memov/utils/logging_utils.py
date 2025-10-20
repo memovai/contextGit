@@ -20,7 +20,9 @@ def setup_logging(loc: str, level: str = "INFO") -> None:
     # File handler for debug messages
     log_path = os.path.join(mem_dir, "mem.log")
     file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
-    file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s:%(lineno)s - %(message)s")
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s:%(lineno)s - %(message)s"
+    )
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(logging.DEBUG)
 

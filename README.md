@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://github.com/memovai/contextGit">
+    <img src="docs/images/memov-banner.png" width="800px" alt="MemoV - The Memory Layer for AI Coding Agents">
+  </a>
+</p>
+
 # Mem MCP Server
 
 Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.

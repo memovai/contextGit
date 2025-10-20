@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort (via poetry)
+        entry: poetry run isort
+        language: system
+        types: [python]
+        
+      - id: black
+        name: black (via poetry)
+        entry: poetry run black
+        language: system
+        types: [python]
+

@@ -1,0 +1,59 @@
+name: Build Binary and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Only trigger on version tags
+  workflow_dispatch:  # Manual trigger is also allowed
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.2.3)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    name: Build with PyInstaller
+    runs-on: windows-latest
+
+    env:
+      RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Poetry
+        run: |
+          pip install poetry
+
+      - name: Install dependencies with Poetry
+        run: |
+          poetry install --no-root
+
+      - name: Install PyInstaller inside Poetry env
+        run: |
+          poetry run pip install pyinstaller
+
+      - name: Build executable with PyInstaller
+        run: |
+          poetry run pyinstaller --onefile memov/main.py --name mem.exe
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp dist/mem.exe release/mem_${{ env.RELEASE_VERSION }}_x64.exe
+
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          name: mem ${{ env.RELEASE_VERSION }}
+          files: release/mem_${{ env.RELEASE_VERSION }}_x64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

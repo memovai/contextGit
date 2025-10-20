@@ -1,0 +1,38 @@
+[project]
+name = "memov"
+version = "0.0.3"
+description = "Vibecoding Version Control"
+authors = [
+    {name = "crispyberry",email = "ssslvky@gmail.com"},
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pathspec>=0.11.0",
+    "typer (>=0.19.2,<0.20.0)",
+]
+
+
+[project.urls]
+repository = "https://github.com/memovai/mem.git"
+
+
+[project.scripts]
+mem = "memov.main:main"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+isort = "^6.0.1"
+pre-commit = "^4.2.0"
+
+
+[tool.black]
+line-length = 110
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+

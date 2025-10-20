@@ -19,6 +19,9 @@ mem = "memov.main:main"
 mem-mcp-server = "mem_mcp_server.cli.server_cli:main"
 mem-mcp-launcher = "mem_mcp_server.server.mcp_launcher:main"
 
+[tool.setuptools]
+packages = ["memov", "mem_mcp_server"]
+
 [tool.uv]
 package = true
 

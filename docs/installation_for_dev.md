@@ -21,28 +21,20 @@
    uv run pre-commit install
    ```
 
-3. **Optional: Link core memory package** (for advanced development):
-   ```bash
-   # Clone the core mem package
-   cd ..
-   git clone git@github.com:memovai/mem.git
-
-   # Install as editable dependency
-   cd memov
-   uv pip install -e ../mem
-   ```
 
 ## Available Commands
 
-The project provides two main entry points:
+The project provides three main entry points:
 
 | Command | Purpose | Module |
 |---------|---------|---------|
+| `mem` | Core CLI for memov operations | `memov.main:main` |
 | `mem-mcp-server` | Server management CLI | `mem_mcp_server.cli.server_cli:main` |
 | `mem-mcp-launcher` | Direct MCP runtime launcher | `mem_mcp_server.server.mcp_launcher:main` |
 
 **Run commands without global installation:**
 ```bash
+uv run mem --help
 uv run mem-mcp-server --help
 uv run mem-mcp-launcher --help
 ```

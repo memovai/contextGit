@@ -1,13 +1,13 @@
 [project]
 name = "memov"
 version = "0.0.1"
-description = "MCP Server for memov management and workspace monitoring"
+description = "AI coding version control on top of Git - Track not just what changed, but why it changed"
 authors = [{name = "Memov Team", email = "contact@memov.dev"}]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "mcp>=1.13.0",
-    "memov",
+    "pathspec>=0.11.0",
     "psutil>=7.0.0",
     "starlette>=0.47.2",
     "typer>=0.16.0",
@@ -15,14 +15,12 @@ dependencies = [
 ]
 
 [project.scripts]
+mem = "memov.main:main"
 mem-mcp-server = "mem_mcp_server.cli.server_cli:main"
 mem-mcp-launcher = "mem_mcp_server.server.mcp_launcher:main"
 
 [tool.uv]
 package = true
-
-[tool.uv.sources]
-memov = { git = "https://github.com/memovai/mem.git" }
 
 [tool.black]
 line-length = 100

@@ -1,10 +1,10 @@
 [project]
-name = "mem-mcp-server"
+name = "contextGit"
 version = "0.0.1"
-description = "MCP Server for mem management and workspace monitoring"
+description = "MCP Server for contextGit management and workspace monitoring"
 authors = [{name = "Memov Team", email = "contact@memov.dev"}]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "mcp>=1.13.0",
     "memov",

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/memovai/contextGit">
+  <a href="https://github.com/memovai/memov">
     <img src="docs/images/memov-banner.png" width="800px" alt="MemoV - The Memory Layer for AI Coding Agents">
   </a>
 </p>

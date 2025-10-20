@@ -1,7 +1,7 @@
 [project]
-name = "contextGit"
+name = "memov"
 version = "0.0.1"
-description = "MCP Server for contextGit management and workspace monitoring"
+description = "MCP Server for memov management and workspace monitoring"
 authors = [{name = "Memov Team", email = "contact@memov.dev"}]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

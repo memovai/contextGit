@@ -10,8 +10,8 @@
 
 1. **Clone and install dependencies:**
    ```bash
-   git clone git@github.com:memovai/contextGit.git
-   cd contextGit
+   git clone git@github.com:memovai/memov.git
+   cd memov
    uv sync
    ```
 
@@ -28,7 +28,7 @@
    git clone git@github.com:memovai/mem.git
 
    # Install as editable dependency
-   cd contextGit
+   cd memov
    uv pip install -e ../mem
    ```
 

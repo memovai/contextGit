@@ -20,7 +20,7 @@ mem-mcp-server = "mem_mcp_server.cli.server_cli:main"
 mem-mcp-launcher = "mem_mcp_server.server.mcp_launcher:main"
 
 [tool.setuptools]
-packages = ["memov", "mem_mcp_server"]
+packages = { find = {} }
 
 [tool.uv]
 package = true

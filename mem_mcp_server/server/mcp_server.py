@@ -107,33 +107,68 @@ class MemMCPTools:
                         Made changes.
                         ```
                         I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
-            agent_plan: The summarized reasoning and action plan the AI took to arrive at the response
+            agent_plan: High-level summary of the major changes, organized by file
                 Notes:
-                    - Provide a concise, step-by-step outline of the reasoning and planned actions the AI just took.
-                    - Write it as a JSON object called "planning_strategy", where each key is "plan1", "plan2", etc., and each value is a short descriptive sentence of the step.
-                    - The steps do not need to follow a strict setup/implementation/testing order; focus instead on the actual reasoning path the AI used in this response.
+                    - Each step should describe ONE significant modification to a specific file
+                    - Format: "[file]: [what changed]"
+                    - Aim for 2-5 high-level steps that map to distinct logical changes
+                    - Focus on WHAT was changed in each file, not HOW the change was made
+                    - Group all related changes to the same file into one step when they serve the same purpose
 
                 Format:
                     [
-                        <first reasoning step>,
-                        <second reasoning step>,
-                        <third reasoning step>
+                        "<filename>: <concise description of what changed>",
+                        "<filename>: <concise description of what changed>",
+                        ...
                     ]
 
-                Example:
-                    Chat content:
-                        [User Prompt]: Change the print statement in hello.py to "Hello World"
-                        [AI Response]: I can see that the file currently shows "Hello Earth" but you mentioned the edits were undone. Let me check the current content of the file to see what needs to be changed. I can see the file currently has "Hello Earth". I'll change it back to "Hello World" as requested.
-                        ```
-                        Made changes.
-                        ```
-                        I've successfully changed "Hello Earth" back to "Hello World" in both the comment and the print statement in your hello.py file. The script will now output "Hello World" when run.
-                    agent_plan:
+                Good Examples (file-focused, concise):
+                    Example 1 - Multiple files changed:
+                        [User Prompt]: Add error handling and logging to the API endpoint
+                        agent_plan:
                         [
-                            "Reviewed the current content of hello.py to identify the existing print statement.",
-                            "Identified the need to change 'Hello Earth' back to 'Hello World'.",
-                            "Updated the print statement and comments in hello.py accordingly."
+                            "api/routes.py: Added try-catch error handling and logging integration",
+                            "utils/logger.py: Created configure_logging() helper function"
                         ]
+
+                    Example 2 - Multiple files for feature:
+                        [User Prompt]: Refactor database connection to use connection pooling
+                        agent_plan:
+                        [
+                            "db/connection.py: Refactored to use connection pool instead of direct connections",
+                            "db/pool.py: Implemented ConnectionPool class with acquire/release methods",
+                            "config/settings.py: Added connection pool configuration parameters"
+                        ]
+
+                    Example 3 - Simple single file change:
+                        [User Prompt]: Fix typo in error message
+                        agent_plan:
+                        [
+                            "handlers/auth.py: Fixed typo in error message"
+                        ]
+
+                    Example 4 - New files created:
+                        [User Prompt]: Create a user authentication module
+                        agent_plan:
+                        [
+                            "auth/login.py: Created login handler with JWT token generation",
+                            "auth/middleware.py: Created authentication middleware",
+                            "tests/test_auth.py: Added test cases for login and middleware"
+                        ]
+
+                Bad Examples (too vague, too granular, or missing file):
+                    ❌ "Updated the code" (no file specified)
+                    ❌ "api/routes.py: Made changes" (too vague, what changed?)
+                    ❌ "Added a line" (no file, no context)
+                    ❌ "Fixed the bug" (no file specified)
+                    ❌ "api/routes.py: Added import, created variable, wrote if statement, added return, saved file" (too granular - should be one logical change)
+                    ❌ "Added error handling in handle_request(), error_handler(), and validate_input() functions" (no file specified)
+
+                Key Principles:
+                    - Always start with the file path
+                    - Describe the logical change, not implementation details
+                    - One file, one logical purpose = one step
+                    - Be concise but specific about what changed
 
             files_changed: Comma-separated relative path list of files that were modified/created/deleted
                           (e.g. "file1.py,module1/file2.py"), or empty string "" if no files changed

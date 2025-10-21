@@ -15,9 +15,10 @@ import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-from memov.core.manager import MemovManager, MemStatus
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
+
+from memov.core.manager import MemovManager, MemStatus
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,7 +156,9 @@ class MemMCPTools:
                 raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
 
             # Concatenate the agent plan into the original response for full context
-            agent_plan_dict = {"plan" + str(i + 1): plan_step for i, plan_step in enumerate(agent_plan)}
+            agent_plan_dict = {
+                "plan" + str(i + 1): plan_step for i, plan_step in enumerate(agent_plan)
+            }
             full_response = (
                 "[Agent Plan]:\n"
                 + '"planning_strategy": '
@@ -181,9 +184,7 @@ class MemMCPTools:
                 # Case 1: No file changes - just record the interaction
                 LOGGER.info("No files changed, recording prompt-only snapshot")
                 snap_status = memov_manager.snapshot(
-                    prompt=user_prompt,
-                    response=full_response,
-                    by_user=False
+                    prompt=user_prompt, response=full_response, by_user=False
                 )
                 if snap_status is not MemStatus.SUCCESS:
                     LOGGER.error(f"Failed to record interaction: {snap_status}")
@@ -232,16 +233,18 @@ class MemMCPTools:
                             by_user=False,
                         )
                         if track_status is not MemStatus.SUCCESS:
-                            LOGGER.error(f"Failed to track file {file_changed_Path}: {track_status}")
-                            return f"[ERROR] Failed to track file {file_changed_Path}: {track_status}"
+                            LOGGER.error(
+                                f"Failed to track file {file_changed_Path}: {track_status}"
+                            )
+                            return (
+                                f"[ERROR] Failed to track file {file_changed_Path}: {track_status}"
+                            )
                         files_processed.append(f"{file_changed} (tracked)")
                     else:
                         # Snap modified file
                         LOGGER.info(f"Snapping modified file: {file_changed}")
                         snap_status = memov_manager.snapshot(
-                            prompt=user_prompt,
-                            response=full_response,
-                            by_user=False
+                            prompt=user_prompt, response=full_response, by_user=False
                         )
                         if snap_status is not MemStatus.SUCCESS:
                             LOGGER.error(f"Failed to snap {file_changed_Path}: {snap_status}")

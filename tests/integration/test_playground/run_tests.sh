@@ -144,35 +144,77 @@ print_step "4.5: Snapshot .memignore changes"
 uv run --directory "$MEMOV_ROOT" mem snap --loc "$PROJECT_DIR" -p "Updated ignore rules" -r "Added temp and log patterns"
 print_success "Snapshotted .memignore"
 
-print_section "Stage 5: Track Remaining Files"
+print_section "Stage 5: File State Transitions (Clean/Modified/Untracked)"
 
-print_step "5.1: Track data files"
+print_step "5.1: Verify Clean state - tracked files with no changes"
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Clean:.*README.md" > /dev/null && print_success "README.md is Clean"
+
+print_step "5.2: Verify Untracked state - files not yet tracked"
+echo "$STATUS" | grep "Untracked:.*data/config.json" > /dev/null && print_success "data/config.json is Untracked"
+
+print_step "5.3: Verify Modified state - .memignore was changed"
+echo "$STATUS" | grep "Modified:.*\.memignore" > /dev/null && print_success ".memignore is Modified"
+
+print_step "5.4: Track an untracked file - state transition: Untracked → Clean"
+uv run --directory "$MEMOV_ROOT" mem track --loc "$PROJECT_DIR" "$PROJECT_DIR/docs/api.md" -p "Track docs" -r "Adding API documentation"
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Clean:.*docs/api.md" > /dev/null && print_success "docs/api.md transitioned to Clean"
+
+print_step "5.5: Modify a clean file - state transition: Clean → Modified"
+echo "New API endpoint" >> docs/api.md
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Modified:.*docs/api.md" > /dev/null && print_success "docs/api.md transitioned to Modified"
+
+print_step "5.6: Snapshot modified files - state transition: Modified → Clean"
+uv run --directory "$MEMOV_ROOT" mem snap --loc "$PROJECT_DIR" -p "Update docs" -r "Saved changes"
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Clean:.*docs/api.md" > /dev/null && print_success "docs/api.md transitioned back to Clean"
+echo "$STATUS" | grep "Clean:.*\.memignore" > /dev/null && print_success ".memignore also transitioned to Clean"
+
+print_step "5.7: Verify all three states coexist correctly"
+echo "Another line" >> README.md  # Make a tracked file Modified
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+HAS_CLEAN=$(echo "$STATUS" | grep -c "Clean:" || true)
+HAS_MODIFIED=$(echo "$STATUS" | grep -c "Modified:" || true)
+HAS_UNTRACKED=$(echo "$STATUS" | grep -c "Untracked:" || true)
+if [ "$HAS_CLEAN" -gt 0 ] && [ "$HAS_MODIFIED" -gt 0 ] && [ "$HAS_UNTRACKED" -gt 0 ]; then
+    print_success "All three states (Clean/Modified/Untracked) present simultaneously"
+else
+    print_error "Missing states: Clean=$HAS_CLEAN Modified=$HAS_MODIFIED Untracked=$HAS_UNTRACKED"
+    exit 1
+fi
+echo -e "${GREEN}State summary: ${HAS_CLEAN} Clean, ${HAS_MODIFIED} Modified, ${HAS_UNTRACKED} Untracked${NC}\n"
+
+print_section "Stage 6: Track Remaining Files"
+
+print_step "6.1: Track data files"
 OUTPUT=$(uv run --directory "$MEMOV_ROOT" mem track --loc "$PROJECT_DIR" "$PROJECT_DIR/data/config.json" "$PROJECT_DIR/data/settings.yaml" -p "Data files" -r "JSON and YAML data" 2>&1)
 check_output_for_errors "$OUTPUT"
 print_success "Tracked data files"
 
-print_section "Stage 6: File Operations"
+print_section "Stage 7: File Operations"
 
-print_step "6.1: Rename a file"
+print_step "7.1: Rename a file"
 uv run --directory "$MEMOV_ROOT" mem rename --loc "$PROJECT_DIR" "$PROJECT_DIR/normal.txt" "$PROJECT_DIR/renamed.txt" -p "Rename operation" -r "Renamed normal.txt"
 print_success "File renamed"
 
-print_step "6.2: Check renamed file exists"
+print_step "7.2: Check renamed file exists"
 test -f "$PROJECT_DIR/renamed.txt" && print_success "Renamed file exists"
 
-print_step "6.3: Snapshot after rename"
+print_step "7.3: Snapshot after rename"
 uv run --directory "$MEMOV_ROOT" mem snap --loc "$PROJECT_DIR" -p "After rename" -r "Snapshotted rename"
 print_success "Snapshot created"
 
-print_section "Stage 7: History & Verification"
+print_section "Stage 8: History & Verification"
 
-print_step "7.1: View complete history"
+print_step "8.1: View complete history"
 OUTPUT=$(uv run --directory "$MEMOV_ROOT" mem history --loc "$PROJECT_DIR" 2>&1)
 check_output_for_errors "$OUTPUT"
 echo "$OUTPUT"
 print_success "History displayed"
 
-print_step "7.2: Get first commit hash and show details"
+print_step "8.2: Get first commit hash and show details"
 FIRST_COMMIT=$(uv run --directory "$MEMOV_ROOT" mem history --loc "$PROJECT_DIR" 2>&1 | grep -oE '[a-f0-9]{7}' | tail -1)
 if [ -z "$FIRST_COMMIT" ]; then
     print_error "Failed to get commit hash"
@@ -183,7 +225,7 @@ check_output_for_errors "$OUTPUT"
 echo "$OUTPUT"
 print_success "Show command works"
 
-print_step "7.3: Amend commit message"
+print_step "8.3: Amend commit message"
 OUTPUT=$(uv run --directory "$MEMOV_ROOT" mem amend --loc "$PROJECT_DIR" "$FIRST_COMMIT" -p "Updated prompt" -r "Updated response" --by_user 2>&1)
 check_output_for_errors "$OUTPUT"
 print_success "Amend command works"

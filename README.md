@@ -4,7 +4,7 @@
   </a>
 </p>
 
-# Never forget to commit. Never pollute your Git history
+# Never forget a commit. Never touch your Git.
 
 <div align="center">
 

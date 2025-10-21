@@ -275,10 +275,21 @@ class MemovManager:
             if file_paths is not None:
                 # Convert file_paths to relative paths
                 specified_rel_paths = set()
+                project_path_resolved = Path(self.project_path).resolve()
+
                 for fp in file_paths:
-                    abs_fp = Path(fp).resolve()
+                    # If fp is already relative, make it relative to project_path
+                    # If fp is absolute, convert to relative to project_path
+                    fp_path = Path(fp)
+                    if fp_path.is_absolute():
+                        abs_fp = fp_path.resolve()
+                    else:
+                        # Relative path - assume it's relative to project_path
+                        abs_fp = (Path(self.project_path) / fp).resolve()
+
                     try:
-                        rel_fp = os.path.relpath(abs_fp, self.project_path)
+                        # Use Path.relative_to instead of os.path.relpath to handle symlinks correctly
+                        rel_fp = str(abs_fp.relative_to(project_path_resolved))
                         specified_rel_paths.add(rel_fp)
                     except ValueError:
                         LOGGER.warning(f"File {fp} is not in project path, skipping")

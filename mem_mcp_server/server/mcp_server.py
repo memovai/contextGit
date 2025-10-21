@@ -208,7 +208,45 @@ class MemMCPTools:
                     LOGGER.error(f"Failed to check file status: {ret_status}")
                     return f"[ERROR] Failed to check file status: {ret_status}"
 
-                # Separate files into untracked and modified
+                # Build set of AI-changed files (from files_changed parameter)
+                ai_changed_files = set()
+                for file_changed in files_changed.split(","):
+                    file_changed = file_changed.strip()
+                    if file_changed:
+                        file_path = Path(MemMCPTools._project_path) / file_changed
+                        ai_changed_files.add(file_path.resolve())
+
+                # Detect manual edits: modified files that are NOT in AI-changed list
+                manual_edit_files = []
+                project_path_resolved = Path(MemMCPTools._project_path).resolve()
+                for modified_file in current_file_status["modified"]:
+                    # modified_file is already a Path object with absolute path (resolved)
+                    if modified_file.resolve() not in ai_changed_files:
+                        # Use relative path (relative to project_path) for snapshot
+                        try:
+                            rel_path = str(modified_file.relative_to(project_path_resolved))
+                            manual_edit_files.append(rel_path)
+                        except ValueError:
+                            # File is outside project path, use absolute path
+                            LOGGER.warning(f"File {modified_file} is outside project path")
+                            manual_edit_files.append(str(modified_file))
+
+                # Step 1: Capture manual edits first (if any)
+                if manual_edit_files:
+                    LOGGER.info(f"Detected manual edits: {manual_edit_files}")
+                    manual_snap_status = memov_manager.snapshot(
+                        file_paths=manual_edit_files,
+                        prompt="Manual edits detected before AI operation",
+                        response=f"User manually edited: {', '.join([Path(f).name for f in manual_edit_files])}",
+                        by_user=True,
+                    )
+                    if manual_snap_status is not MemStatus.SUCCESS:
+                        LOGGER.error(f"Failed to snapshot manual edits: {manual_snap_status}")
+                        return f"[ERROR] Failed to snapshot manual edits: {manual_snap_status}"
+                    LOGGER.info(f"Captured manual edits in separate commit")
+
+                # Step 2: Process AI changes
+                # Separate AI-changed files into untracked and modified
                 files_to_track = []
                 files_to_snap = []
                 files_processed = []
@@ -247,9 +285,9 @@ class MemMCPTools:
                         LOGGER.error(f"Failed to track files: {track_status}")
                         return f"[ERROR] Failed to track files: {track_status}"
 
-                # Snap all modified files at once (fine-grained snapshot)
+                # Snap all AI-modified files at once (fine-grained snapshot)
                 if files_to_snap:
-                    LOGGER.info(f"Snapping modified files: {files_to_snap}")
+                    LOGGER.info(f"Snapping AI-modified files: {files_to_snap}")
                     snap_status = memov_manager.snapshot(
                         file_paths=files_to_snap,
                         prompt=user_prompt,
@@ -262,9 +300,13 @@ class MemMCPTools:
 
                 # Build detailed result message
                 result_parts = ["[SUCCESS] Changes recorded successfully"]
+                if manual_edit_files:
+                    result_parts.append(
+                        f"Manual edits captured: {', '.join([Path(f).name for f in manual_edit_files])}"
+                    )
                 result_parts.append(f"Prompt: {user_prompt}")
                 result_parts.append(f"Response: {len(full_response)} characters")
-                result_parts.append(f"Files: {', '.join(files_processed)}")
+                result_parts.append(f"AI changes: {', '.join(files_processed)}")
                 result = "\n".join(result_parts)
                 LOGGER.info(f"Operation completed successfully: {result}")
                 return result

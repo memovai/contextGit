@@ -15,6 +15,7 @@
 </div>
 
 MemoV = Prompt + Context + CodeDiff
+
 It gives AI coding agents a traceable memory layer beyond Git — auto-capturing **every prompt**, **agent plan**, and **code change** in a separate timeline. Work freely with AI, iterate fast, and keep your Git history clean. When you're ready, cherry-pick what matters for Git commits.
 
 - 💬 [Join our Discord](https://discord.gg/un54aD7Hug) and dive into smarter context engineering

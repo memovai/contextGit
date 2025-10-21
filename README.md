@@ -4,11 +4,17 @@
   </a>
 </p>
 
-# MemoV - ContextGit = Prompt + Context + CodeDiff 
+# Never forget to commit. Never pollute your Git history
 
-**Never worry about forgetting to commit. Never pollute your Git history.**
+<div align="center">
 
-MemoV gives AI coding agents a traceable memory layer beyond Git — auto-capturing **every prompt**, **agent plan**, and **code change** in a separate timeline. Work freely with AI, iterate fast, and keep your Git history clean. When you're ready, cherry-pick what matters for Git commits.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Twitter Follow](https://img.shields.io/twitter/follow/ssslvky?style=social)](https://x.com/ssslvky)
+
+</div>
+
+MemoV = Prompt + Context + CodeDiff
+It gives AI coding agents a traceable memory layer beyond Git — auto-capturing **every prompt**, **agent plan**, and **code change** in a separate timeline. Work freely with AI, iterate fast, and keep your Git history clean. When you're ready, cherry-pick what matters for Git commits.
 
 - 💬 [Join our Discord](https://discord.gg/un54aD7Hug) and dive into smarter context engineering
 - 🌐 [Visit memov.ai](https://memov.ai) to visualize your coding memory and supercharge existing GitHub repos

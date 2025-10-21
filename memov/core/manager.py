@@ -619,16 +619,17 @@ class MemovManager:
         def filter(file_rel_path: str) -> bool:
             """Check if the file should be ignored"""
 
-            # Never filter out .memignore itself
+            # Filter out files that are already tracked if tracked_file_rel_paths is provided
+            if tracked_file_rel_paths is not None and file_rel_path in tracked_file_rel_paths:
+                return True
+
+            # Never filter out .memignore itself based on .memignore rules
+            # (but it can still be filtered if already tracked above)
             if file_rel_path == ".memignore":
                 return False
 
             # Filter out files that match .memignore rules
             if exclude_memignore and memignore_pspec.match_file(file_rel_path):
-                return True
-
-            # Filter out files that are already tracked if tracked_file_rel_paths is provided
-            if tracked_file_rel_paths is not None and file_rel_path in tracked_file_rel_paths:
                 return True
 
             return False

@@ -4,13 +4,14 @@
   </a>
 </p>
 
-# Mem MCP Server
+# MemoV - ContextGit = Prompt + Context + CodeDiff 
 
-Mem extends coding agents with beyond-Git memory — auto-capturing **prompts**, **agent plans**, and **code changes** as bound context.
-As your **coding partner**, it accelerates debugging, shares context in real time, reuses edits, prevents agentic infinite loops, and turns history into learning.
+**Never worry about forgetting to commit. Never pollute your Git history.**
 
-- 💬 [Join our Discord](https://discord.gg/YCN75dTh) and dive into smarter context engineering
-- 🌐 [Visit memov.im](https://memov.im) to visualize your Mem history and supercharge existing GitHub repos
+MemoV gives AI coding agents a traceable memory layer beyond Git — auto-capturing **every prompt**, **agent plan**, and **code change** in a separate timeline. Work freely with AI, iterate fast, and keep your Git history clean. When you're ready, cherry-pick what matters for Git commits.
+
+- 💬 [Join our Discord](https://discord.gg/un54aD7Hug) and dive into smarter context engineering
+- 🌐 [Visit memov.ai](https://memov.ai) to visualize your coding memory and supercharge existing GitHub repos
 
 
 <div align="center">
@@ -23,10 +24,9 @@ As your **coding partner**, it accelerates debugging, shares context in real tim
 ## Features
 
 - 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
-- 🐞 **Context-aware debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
+- 🐞 **Vibe debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
 - 🤝 **Team context sharing**: Real-time alignment with zero friction
 - ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature
-- 🛑 **Loop guard**: Prevent runaway agent auto-generation by intervening and halting infinite loops
 - 🔍 **History-driven optimization**: Use past records and failed generations as reference context to boost future outputs
 
 
@@ -42,11 +42,8 @@ Please see [docs/installation_for_dev.md](docs/installation_for_dev.md) for deta
 
 These are available to MCP clients through the server:
 
-- `mem_snap(files_changed: str)`
+- `snap(files_changed: str)`
   - Create a mem snapshot tied to the previously set user prompt. Handles untracked vs modified files intelligently. Argument is a comma-separated list of relative paths.
-
-- `GET /health`
-  - Returns "OK". Useful for IDE/agent readiness checks.
 
 
 ## License

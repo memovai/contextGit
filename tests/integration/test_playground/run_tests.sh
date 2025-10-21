@@ -186,6 +186,28 @@ else
 fi
 echo -e "${GREEN}State summary: ${HAS_CLEAN} Clean, ${HAS_MODIFIED} Modified, ${HAS_UNTRACKED} Untracked${NC}\n"
 
+print_step "5.8: Test fine-grained snapshot - only snap specific files"
+# Setup: Modify multiple files
+echo "Manual change 1" >> another.txt
+echo "Manual change 2" >> empty.txt
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Modified:.*another.txt" > /dev/null && print_success "another.txt is Modified"
+echo "$STATUS" | grep "Modified:.*empty.txt" > /dev/null && print_success "empty.txt is Modified"
+echo "$STATUS" | grep "Modified:.*README.md" > /dev/null && print_success "README.md is still Modified"
+
+# Fine-grained snapshot: only snap another.txt
+uv run --directory "$MEMOV_ROOT" mem snap --loc "$PROJECT_DIR" --files "$PROJECT_DIR/another.txt" -p "Fine-grained snap" -r "Only snapping another.txt"
+STATUS=$(uv run --directory "$MEMOV_ROOT" mem status --loc "$PROJECT_DIR" 2>&1)
+echo "$STATUS" | grep "Clean:.*another.txt" > /dev/null && print_success "another.txt is now Clean after fine-grained snap"
+echo "$STATUS" | grep "Modified:.*empty.txt" > /dev/null && print_success "empty.txt is still Modified (not snapped)"
+echo "$STATUS" | grep "Modified:.*README.md" > /dev/null && print_success "README.md is still Modified (not snapped)"
+
+# Verify history shows only another.txt in the snapshot
+LAST_COMMIT=$(uv run --directory "$MEMOV_ROOT" mem history --loc "$PROJECT_DIR" 2>&1 | grep -oE '[a-f0-9]{7}' | head -1)
+SHOW_OUTPUT=$(uv run --directory "$MEMOV_ROOT" mem show --loc "$PROJECT_DIR" "$LAST_COMMIT" 2>&1)
+echo "$SHOW_OUTPUT" | grep "Fine-grained snap" > /dev/null && print_success "Commit message shows fine-grained snap"
+echo "$SHOW_OUTPUT" | grep "another.txt" > /dev/null && print_success "Commit includes another.txt"
+
 print_section "Stage 6: Track Remaining Files"
 
 print_step "6.1: Track data files"

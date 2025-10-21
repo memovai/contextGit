@@ -84,6 +84,13 @@ def track(
 
 @app.command()
 def snap(
+    files: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--files",
+            help="Specific files to snapshot (comma-separated or multiple --files flags). If not specified, snapshots all tracked files.",
+        ),
+    ] = None,
     loc: LocOption = ".",
     prompt: PromptOption = None,
     response: ResponseOption = None,
@@ -91,7 +98,7 @@ def snap(
 ) -> None:
     """Create a snapshot of the current project state."""
     manager = get_manager(loc)
-    manager.snapshot(prompt, response, by_user)
+    manager.snapshot(file_paths=files, prompt=prompt, response=response, by_user=by_user)
 
 
 @app.command()

@@ -240,6 +240,52 @@ class GitManager:
         return commit_hash
 
     @staticmethod
+    def create_commit_from_tree_structure(
+        bare_repo: str, tree_structure: dict, commit_msg: str
+    ) -> str:
+        """Create a commit from a pre-built tree structure with blob hashes.
+
+        Args:
+            bare_repo: Path to the bare git repository
+            tree_structure: Nested dict structure where leaves are blob hashes
+            commit_msg: Commit message
+
+        Returns:
+            Commit hash, or empty string on failure
+        """
+
+        # Recursively create trees from the structure
+        def create_tree_recursive(structure: dict) -> str:
+            """Recursively create git tree objects from nested directory structure."""
+            entries = []
+
+            for name, value in sorted(structure.items()):
+                if isinstance(value, dict):
+                    # It's a directory - recursively create subtree
+                    subtree_hash = create_tree_recursive(value)
+                    if not subtree_hash:
+                        return ""
+                    entries.append(f"040000 tree {subtree_hash}\t{name}\n")
+                else:
+                    # It's a file blob
+                    entries.append(f"100644 blob {value}\t{name}\n")
+
+            # Create tree from entries
+            return GitManager.create_tree(bare_repo, entries)
+
+        tree_hash = create_tree_recursive(tree_structure)
+        if not tree_hash:
+            LOGGER.error("Failed to create tree structure")
+            return ""
+
+        # Get the parent commit hash
+        parent_hash = GitManager.get_commit_id_by_ref(bare_repo, "refs/memov/HEAD", verbose=False)
+
+        # Commit the tree
+        commit_hash = GitManager.commit_tree(bare_repo, tree_hash, commit_msg, parent_hash)
+        return commit_hash
+
+    @staticmethod
     def git_show(bare_repo: str, commit_id: str) -> None:
         """Show details of a specific snapshot in the memov bare repo, similar to git show."""
         command = ["git", f"--git-dir={bare_repo}", "show", commit_id]

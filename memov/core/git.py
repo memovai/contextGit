@@ -65,9 +65,13 @@ class GitManager:
             return output.stdout.strip()
         else:
             if verbose:
-                LOGGER.error(f"Failed to get commit ID for reference {ref} in repository at {repo_path}")
+                LOGGER.error(
+                    f"Failed to get commit ID for reference {ref} in repository at {repo_path}"
+                )
             else:
-                LOGGER.debug(f"Failed to get commit ID for reference {ref} in repository at {repo_path}")
+                LOGGER.debug(
+                    f"Failed to get commit ID for reference {ref} in repository at {repo_path}"
+                )
             return ""
 
     @staticmethod
@@ -93,7 +97,9 @@ class GitManager:
 
     # TODO: merge this with get_files_by_commit
     @staticmethod
-    def get_files_and_blobs_by_commit(repo_path: str, commit_id: str, project_path: str = None) -> dict[str, str]:
+    def get_files_and_blobs_by_commit(
+        repo_path: str, commit_id: str, project_path: str = None
+    ) -> dict[str, str]:
         """Get the list of files and their blob hashes in a specific commit.
 
         Args:
@@ -123,7 +129,9 @@ class GitManager:
 
             return file_blobs
         else:
-            LOGGER.error(f"Failed to get files and blobs for commit {commit_id} in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to get files and blobs for commit {commit_id} in repository at {repo_path}"
+            )
             return {}
 
     @staticmethod
@@ -167,17 +175,62 @@ class GitManager:
             return ""
 
     @staticmethod
-    def write_blob_to_bare_repo(bare_repo: str, new_file_paths: dict[str, str], commit_msg: str) -> str:
-        """Write a file as a blob in the bare Git repository."""
+    def write_blob_to_bare_repo(
+        bare_repo: str, new_file_paths: dict[str, str], commit_msg: str
+    ) -> str:
+        """Write files as blobs in the bare Git repository and create a proper tree structure.
+
+        This handles nested directories by creating a hierarchical tree structure.
+        """
         if len(new_file_paths) == 0:
             return ""
 
-        # Build the tree entries
-        tree_entries = []
+        # Build a directory tree structure
+        # Format: {"dir1": {"dir2": {"file.txt": blob_hash}}}
+        tree_structure = {}
+
         for rel_file, abs_path in new_file_paths.items():
             blob_hash = GitManager.write_blob(bare_repo, abs_path)
-            tree_entries.append(f"100644 blob {blob_hash}\t{rel_file}\n")
-        tree_hash = GitManager.create_tree(bare_repo, tree_entries)
+            if not blob_hash:
+                LOGGER.error(f"Failed to create blob for {rel_file}")
+                return ""
+
+            # Split path into parts
+            parts = rel_file.split("/")
+            current = tree_structure
+
+            # Navigate/create nested structure
+            for part in parts[:-1]:  # All parts except the filename
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+
+            # Add the file blob
+            current[parts[-1]] = blob_hash
+
+        # Recursively create trees from the structure
+        def create_tree_recursive(structure: dict) -> str:
+            """Recursively create git tree objects from nested directory structure."""
+            entries = []
+
+            for name, value in sorted(structure.items()):
+                if isinstance(value, dict):
+                    # It's a directory - recursively create subtree
+                    subtree_hash = create_tree_recursive(value)
+                    if not subtree_hash:
+                        return ""
+                    entries.append(f"040000 tree {subtree_hash}\t{name}\n")
+                else:
+                    # It's a file blob
+                    entries.append(f"100644 blob {value}\t{name}\n")
+
+            # Create tree from entries
+            return GitManager.create_tree(bare_repo, entries)
+
+        tree_hash = create_tree_recursive(tree_structure)
+        if not tree_hash:
+            LOGGER.error("Failed to create tree structure")
+            return ""
 
         # Get the parent commit hash
         parent_hash = GitManager.get_commit_id_by_ref(bare_repo, "refs/memov/HEAD", verbose=False)
@@ -227,7 +280,9 @@ class GitManager:
         if success and output.stdout:
             return output.stdout.strip()
         else:
-            LOGGER.error(f"Failed to get commit message for {commit_id} in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to get commit message for {commit_id} in repository at {bare_repo}"
+            )
             return ""
 
     @staticmethod
@@ -239,7 +294,9 @@ class GitManager:
         if success:
             return output.stdout
         else:
-            LOGGER.error(f"Failed to export commit {commit_id} to tar archive in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to export commit {commit_id} to tar archive in repository at {bare_repo}"
+            )
             return None
 
     @staticmethod
@@ -249,10 +306,14 @@ class GitManager:
         success, output = subprocess_call(command=command)
 
         if not success:
-            LOGGER.error(f"Failed to update ref {ref_name} to {commit_id} in repository at {bare_repo}")
+            LOGGER.error(
+                f"Failed to update ref {ref_name} to {commit_id} in repository at {bare_repo}"
+            )
 
     @staticmethod
-    def amend_commit_message(repo_path: str, commit_hash: str, new_message: str) -> tuple[bool, str]:
+    def amend_commit_message(
+        repo_path: str, commit_hash: str, new_message: str
+    ) -> tuple[bool, str]:
         """
         Attach prompt/response to the commit using git notes (works on bare repos).
         Returns (success, error_message)
@@ -312,9 +373,13 @@ class GitManager:
         if set_git_config("user.name", default_name):
             LOGGER.info(f"Set git user.name to '{default_name}' in repository at {repo_path}")
         else:
-            LOGGER.error(f"Failed to set git user.name to '{default_name}' in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to set git user.name to '{default_name}' in repository at {repo_path}"
+            )
 
         if set_git_config("user.email", default_email):
             LOGGER.info(f"Set git user.email to '{default_email}' in repository at {repo_path}")
         else:
-            LOGGER.error(f"Failed to set git user.email to '{default_email}' in repository at {repo_path}")
+            LOGGER.error(
+                f"Failed to set git user.email to '{default_email}' in repository at {repo_path}"
+            )

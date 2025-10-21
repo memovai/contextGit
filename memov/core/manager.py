@@ -148,20 +148,79 @@ class MemovManager:
                 )
                 return MemStatus.SUCCESS
 
-            # Build tree_entries, including all tracked_files and new files
-            all_files = {}
-            for rel_file, abs_path in zip(tracked_file_rel_paths, tracked_file_abs_paths):
-                all_files[rel_file] = abs_path
-            for rel_file, abs_path in new_files:
-                all_files[rel_file] = abs_path
+            # Build tree with: new files from workspace, existing files from HEAD (to preserve their state)
+            # This ensures we don't accidentally commit manual changes to existing files
+            if head_commit:
+                # Get blob hashes for all existing files in HEAD
+                head_file_blobs = GitManager.get_files_and_blobs_by_commit(
+                    self.bare_repo_path, head_commit, self.project_path
+                )
 
-            commit_msg = "Track files\n\n"
-            commit_msg += f"Files: {', '.join([rel_file for rel_file, _ in new_files])}\n"
-            commit_msg += (
-                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
-            )
+                # Build tree structure
+                tree_structure = {}
 
-            commit_hash = self._commit(commit_msg, all_files)
+                # Add existing files with their HEAD blob hashes (preserve their state)
+                for rel_path in tracked_file_rel_paths:
+                    abs_resolved = (Path(self.project_path) / rel_path).resolve()
+                    blob_hash = head_file_blobs.get(abs_resolved)
+                    if blob_hash:
+                        parts = rel_path.split("/")
+                        current = tree_structure
+                        for part in parts[:-1]:
+                            if part not in current:
+                                current[part] = {}
+                            current = current[part]
+                        current[parts[-1]] = blob_hash
+
+                # Add new files with their current content (new blobs)
+                for rel_path, abs_path in new_files:
+                    blob_hash = GitManager.write_blob(self.bare_repo_path, abs_path)
+                    if not blob_hash:
+                        LOGGER.error(f"Failed to create blob for {rel_path}")
+                        return MemStatus.UNKNOWN_ERROR
+
+                    parts = rel_path.split("/")
+                    current = tree_structure
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = blob_hash
+
+                # Create commit from tree structure
+                commit_msg = "Track files\n\n"
+                commit_msg += f"Files: {', '.join([rel_file for rel_file, _ in new_files])}\n"
+                commit_msg += (
+                    f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+                )
+
+                commit_hash = GitManager.create_commit_from_tree_structure(
+                    self.bare_repo_path, tree_structure, commit_msg
+                )
+
+                if not commit_hash:
+                    LOGGER.error("Failed to create track commit")
+                    return MemStatus.FAILED_TO_COMMIT
+
+                # Update branch
+                self._validate_and_fix_branches()
+                GitManager.ensure_git_user_config(
+                    self.bare_repo_path, self.default_name, self.default_email
+                )
+                self._update_branch(commit_hash)
+            else:
+                # First commit - no existing files
+                all_files = {}
+                for rel_file, abs_path in new_files:
+                    all_files[rel_file] = abs_path
+
+                commit_msg = "Track files\n\n"
+                commit_msg += f"Files: {', '.join([rel_file for rel_file, _ in new_files])}\n"
+                commit_msg += (
+                    f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+                )
+
+                commit_hash = self._commit(commit_msg, all_files)
             if not commit_hash:
                 LOGGER.error("Failed to commit tracked files.")
                 return MemStatus.FAILED_TO_COMMIT
@@ -178,9 +237,24 @@ class MemovManager:
             return MemStatus.UNKNOWN_ERROR
 
     def snapshot(
-        self, prompt: Optional[str] = None, response: Optional[str] = None, by_user: bool = False
+        self,
+        file_paths: Optional[list[str]] = None,
+        prompt: Optional[str] = None,
+        response: Optional[str] = None,
+        by_user: bool = False,
     ) -> MemStatus:
-        """Create a snapshot of the current project state in the memov repo, generating a commit to record the operation."""
+        """Create a snapshot of the current project state in the memov repo, generating a commit to record the operation.
+
+        Args:
+            file_paths: Optional list of specific file paths to snapshot. If None, snapshots all tracked files.
+                       Paths can be absolute or relative to project_path.
+            prompt: Optional prompt text to record with the snapshot
+            response: Optional response text to record with the snapshot
+            by_user: Whether the snapshot was initiated by the user (True) or AI (False)
+
+        Returns:
+            MemStatus indicating success or failure
+        """
         try:
             # Get all tracked files in the memov repo and their previous blob hashes
             tracked_file_rel_paths, tracked_file_abs_paths = [], []
@@ -197,23 +271,112 @@ class MemovManager:
                 LOGGER.warning("No tracked files to snapshot. Please track files first.")
                 return MemStatus.SUCCESS
 
-            # Filter out new files that are not tracked or should be ignored
-            new_files = self._filter_new_files([self.project_path], tracked_file_rel_paths)
+            # If specific files are provided, only update those files in the snapshot
+            if file_paths is not None:
+                # Convert file_paths to relative paths
+                specified_rel_paths = set()
+                for fp in file_paths:
+                    abs_fp = Path(fp).resolve()
+                    try:
+                        rel_fp = os.path.relpath(abs_fp, self.project_path)
+                        specified_rel_paths.add(rel_fp)
+                    except ValueError:
+                        LOGGER.warning(f"File {fp} is not in project path, skipping")
+                        continue
 
-            # If there are untracked files, warn the user
-            if len(new_files) != 0:
-                LOGGER.warning(
-                    f"{Color.RED}Untracked files present: {new_files}. They will not be included in the snapshot.{Color.RESET}"
+                # Verify that specified files are tracked
+                untracked_specified = specified_rel_paths - set(tracked_file_rel_paths)
+                if untracked_specified:
+                    LOGGER.warning(
+                        f"{Color.RED}Some specified files are not tracked and will be skipped: {untracked_specified}{Color.RESET}"
+                    )
+
+                # Filter to only tracked specified files
+                tracked_specified = specified_rel_paths & set(tracked_file_rel_paths)
+                if not tracked_specified:
+                    LOGGER.warning("None of the specified files are tracked. Nothing to snapshot.")
+                    return MemStatus.SUCCESS
+
+                # Get blob hashes for all files in HEAD
+                head_file_blobs = GitManager.get_files_and_blobs_by_commit(
+                    self.bare_repo_path, head_commit, self.project_path
                 )
 
-            # Commit to the bare repo
-            commit_msg = "Create snapshot\n\n"
-            commit_msg += (
-                f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
-            )
-            commit_file_paths = {}
-            for rel_path, abs_path in zip(tracked_file_rel_paths, tracked_file_abs_paths):
-                commit_file_paths[rel_path] = abs_path
+                # Build tree with: specified files from workspace (new blobs), others from HEAD (old blobs)
+                # We need to create blobs and build the tree structure manually
+                tree_structure = {}
+
+                for rel_path in tracked_file_rel_paths:
+                    if rel_path in tracked_specified:
+                        # Create new blob from current workspace content
+                        current_abs_path = Path(self.project_path) / rel_path
+                        if current_abs_path.exists():
+                            blob_hash = GitManager.write_blob(
+                                self.bare_repo_path, str(current_abs_path)
+                            )
+                        else:
+                            LOGGER.warning(
+                                f"Specified file {rel_path} does not exist, using HEAD version"
+                            )
+                            abs_resolved = (Path(self.project_path) / rel_path).resolve()
+                            blob_hash = head_file_blobs.get(abs_resolved)
+                    else:
+                        # Use blob from HEAD for non-specified files
+                        abs_resolved = (Path(self.project_path) / rel_path).resolve()
+                        blob_hash = head_file_blobs.get(abs_resolved)
+
+                    if not blob_hash:
+                        LOGGER.error(f"Failed to get blob for {rel_path}")
+                        return MemStatus.UNKNOWN_ERROR
+
+                    # Build tree structure
+                    parts = rel_path.split("/")
+                    current = tree_structure
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = blob_hash
+
+                # Create tree and commit using the structure
+                commit_hash = GitManager.create_commit_from_tree_structure(
+                    self.bare_repo_path,
+                    tree_structure,
+                    f"Create snapshot\n\nFiles: {', '.join(sorted(tracked_specified))}\nPrompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}",
+                )
+
+                if not commit_hash:
+                    LOGGER.error("Failed to create snapshot commit")
+                    return MemStatus.FAILED_TO_COMMIT
+
+                # Update branch and return
+                self._validate_and_fix_branches()
+                GitManager.ensure_git_user_config(
+                    self.bare_repo_path, self.default_name, self.default_email
+                )
+                self._update_branch(commit_hash)
+                LOGGER.info("Snapshot created in memov repo.")
+                return MemStatus.SUCCESS
+            else:
+                # Original behavior: snapshot all tracked files
+                # Filter out new files that are not tracked or should be ignored
+                new_files = self._filter_new_files([self.project_path], tracked_file_rel_paths)
+
+                # If there are untracked files, warn the user
+                if len(new_files) != 0:
+                    LOGGER.warning(
+                        f"{Color.RED}Untracked files present: {new_files}. They will not be included in the snapshot.{Color.RESET}"
+                    )
+
+                # Build commit file paths with all tracked files
+                commit_file_paths = {}
+                for rel_path, abs_path in zip(tracked_file_rel_paths, tracked_file_abs_paths):
+                    commit_file_paths[rel_path] = abs_path
+
+                commit_msg = "Create snapshot\n\n"
+                commit_msg += (
+                    f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
+                )
 
             self._commit(commit_msg, commit_file_paths)
             LOGGER.info("Snapshot created in memov repo.")

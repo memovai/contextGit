@@ -169,3 +169,8 @@ pids
 config.json
 secrets.json
 .secrets
+
+# Test playground runtime data
+tests/integration/test_playground/sample_project/
+tests/integration/test_playground/*.log
+tests/integration/test_playground/*.txt

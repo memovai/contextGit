@@ -181,16 +181,17 @@ class MemMCPTools:
 
             # Step 2: Handle two cases - with or without file changes
             if not files_changed or files_changed.strip() == "":
-                # Case 1: No file changes - just record the interaction
-                LOGGER.info("No files changed, recording prompt-only snapshot")
-                snap_status = memov_manager.snapshot(
-                    prompt=user_prompt, response=full_response, by_user=False
-                )
-                if snap_status is not MemStatus.SUCCESS:
-                    LOGGER.error(f"Failed to record interaction: {snap_status}")
-                    return f"[ERROR] Failed to record interaction: {snap_status}"
+                # Case 1: No file changes - just record the interaction without snapshotting files
+                # We don't call snapshot() here because that would commit all tracked files,
+                # including any manual changes the user made
+                LOGGER.info("No files changed, skipping snapshot (prompt-only interaction)")
 
-                result_parts = ["[SUCCESS] Interaction recorded (no file changes)"]
+                # TODO: In the future, we could record prompt-only interactions using git notes
+                # or a separate metadata system, without creating commits
+
+                result_parts = [
+                    "[SUCCESS] Interaction recorded (no file changes, no snapshot created)"
+                ]
                 result_parts.append(f"Prompt: {user_prompt}")
                 result_parts.append(f"Response: {len(full_response)} characters")
                 result = "\n".join(result_parts)
@@ -207,8 +208,11 @@ class MemMCPTools:
                     LOGGER.error(f"Failed to check file status: {ret_status}")
                     return f"[ERROR] Failed to check file status: {ret_status}"
 
-                # Process each changed file
+                # Separate files into untracked and modified
+                files_to_track = []
+                files_to_snap = []
                 files_processed = []
+
                 for file_changed in files_changed.split(","):
                     file_changed = file_changed.strip()
                     if not file_changed:
@@ -224,32 +228,37 @@ class MemMCPTools:
                             break
 
                     if is_untracked:
-                        # Track new file
-                        LOGGER.info(f"Tracking new file: {file_changed}")
-                        track_status = memov_manager.track(
-                            [str(file_changed_Path)],
-                            prompt=user_prompt,
-                            response=full_response,
-                            by_user=False,
-                        )
-                        if track_status is not MemStatus.SUCCESS:
-                            LOGGER.error(
-                                f"Failed to track file {file_changed_Path}: {track_status}"
-                            )
-                            return (
-                                f"[ERROR] Failed to track file {file_changed_Path}: {track_status}"
-                            )
+                        files_to_track.append(str(file_changed_Path))
                         files_processed.append(f"{file_changed} (tracked)")
                     else:
-                        # Snap modified file
-                        LOGGER.info(f"Snapping modified file: {file_changed}")
-                        snap_status = memov_manager.snapshot(
-                            prompt=user_prompt, response=full_response, by_user=False
-                        )
-                        if snap_status is not MemStatus.SUCCESS:
-                            LOGGER.error(f"Failed to snap {file_changed_Path}: {snap_status}")
-                            return f"[ERROR] Failed to snap {file_changed_Path}: {snap_status}"
+                        files_to_snap.append(str(file_changed_Path))
                         files_processed.append(f"{file_changed} (snapped)")
+
+                # Track all untracked files at once
+                if files_to_track:
+                    LOGGER.info(f"Tracking new files: {files_to_track}")
+                    track_status = memov_manager.track(
+                        files_to_track,
+                        prompt=user_prompt,
+                        response=full_response,
+                        by_user=False,
+                    )
+                    if track_status is not MemStatus.SUCCESS:
+                        LOGGER.error(f"Failed to track files: {track_status}")
+                        return f"[ERROR] Failed to track files: {track_status}"
+
+                # Snap all modified files at once (fine-grained snapshot)
+                if files_to_snap:
+                    LOGGER.info(f"Snapping modified files: {files_to_snap}")
+                    snap_status = memov_manager.snapshot(
+                        file_paths=files_to_snap,
+                        prompt=user_prompt,
+                        response=full_response,
+                        by_user=False,
+                    )
+                    if snap_status is not MemStatus.SUCCESS:
+                        LOGGER.error(f"Failed to snap files: {snap_status}")
+                        return f"[ERROR] Failed to snap files: {snap_status}"
 
                 # Build detailed result message
                 result_parts = ["[SUCCESS] Changes recorded successfully"]

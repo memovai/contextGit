@@ -221,9 +221,9 @@ class MemovManager:
                 )
 
                 commit_hash = self._commit(commit_msg, all_files)
-            if not commit_hash:
-                LOGGER.error("Failed to commit tracked files.")
-                return MemStatus.FAILED_TO_COMMIT
+                if not commit_hash:
+                    LOGGER.error("Failed to commit tracked files.")
+                    return MemStatus.FAILED_TO_COMMIT
 
             LOGGER.info(
                 f"Tracked file(s) in memov repo and committed: {[abs_path for _, abs_path in new_files]}"

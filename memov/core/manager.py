@@ -5,6 +5,7 @@ import os
 import tarfile
 import traceback
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,7 @@ from typing import Optional
 import pathspec
 
 from memov.core.git import GitManager
+from memov.storage.vectordb import VectorDB
 from memov.utils.print_utils import Color
 from memov.utils.string_utils import short_msg
 
@@ -45,6 +47,21 @@ class MemovManager:
         self.bare_repo_path = os.path.join(self.mem_root_path, "memov.git")
         self.branches_config_path = os.path.join(self.mem_root_path, "branches.json")
         self.memignore_path = os.path.join(self.project_path, ".memignore")
+        self.vectordb_path = os.path.join(self.mem_root_path, "vectordb")
+
+        # Initialize VectorDB (lazy initialization - only when needed)
+        self._vectordb: Optional[VectorDB] = None
+
+    @property
+    def vectordb(self) -> VectorDB:
+        """Get or initialize the VectorDB instance."""
+        if self._vectordb is None:
+            self._vectordb = VectorDB(
+                persist_directory=Path(self.vectordb_path),
+                collection_name="memov_memories",
+                chunk_size=768,
+            )
+        return self._vectordb
 
     def check(self, only_basic_check: bool = False) -> MemStatus:
         """Check some basic conditions for the memov repo."""
@@ -229,6 +246,16 @@ class MemovManager:
                 f"Tracked file(s) in memov repo and committed: {[abs_path for _, abs_path in new_files]}"
             )
 
+            # Write to VectorDB
+            self._write_to_vectordb(
+                operation_type="track",
+                commit_hash=commit_hash,
+                prompt=prompt,
+                response=response,
+                by_user=by_user,
+                files=[rel_file for rel_file, _ in new_files],
+            )
+
             return MemStatus.SUCCESS
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
@@ -367,6 +394,17 @@ class MemovManager:
                 )
                 self._update_branch(commit_hash)
                 LOGGER.info("Snapshot created in memov repo.")
+
+                # Write to VectorDB
+                self._write_to_vectordb(
+                    operation_type="snap",
+                    commit_hash=commit_hash,
+                    prompt=prompt,
+                    response=response,
+                    by_user=by_user,
+                    files=list(tracked_specified),
+                )
+
                 return MemStatus.SUCCESS
             else:
                 # Original behavior: snapshot all tracked files
@@ -389,8 +427,19 @@ class MemovManager:
                     f"Prompt: {prompt}\nResponse: {response}\nSource: {'User' if by_user else 'AI'}"
                 )
 
-            self._commit(commit_msg, commit_file_paths)
+            commit_hash = self._commit(commit_msg, commit_file_paths)
             LOGGER.info("Snapshot created in memov repo.")
+
+            # Write to VectorDB
+            if commit_hash:
+                self._write_to_vectordb(
+                    operation_type="snap",
+                    commit_hash=commit_hash,
+                    prompt=prompt,
+                    response=response,
+                    by_user=by_user,
+                    files=tracked_file_rel_paths,
+                )
 
             return MemStatus.SUCCESS
         except Exception as e:
@@ -453,7 +502,19 @@ class MemovManager:
             # Commit the rename in the memov repo
             file_list = self._filter_new_files([self.project_path], tracked_file_rel_paths=None)
             file_list = {rel_path: abs_path for rel_path, abs_path in file_list}
-            self._commit(commit_msg, file_list)
+            commit_hash = self._commit(commit_msg, file_list)
+
+            # Write to VectorDB
+            if commit_hash:
+                new_rel_path = os.path.relpath(new_abs_path, self.project_path)
+                self._write_to_vectordb(
+                    operation_type="rename",
+                    commit_hash=commit_hash,
+                    prompt=prompt,
+                    response=response,
+                    by_user=by_user,
+                    files=[old_rel_path, new_rel_path],
+                )
 
             LOGGER.info(
                 f"Renamed file in memov repo from {old_file_path} to {new_file_path} and committed."
@@ -521,7 +582,18 @@ class MemovManager:
                 if rel_path != target_rel_path and os.path.exists(abs_path):
                     file_list[rel_path] = abs_path
 
-            self._commit(commit_msg, file_list)
+            commit_hash = self._commit(commit_msg, file_list)
+
+            # Write to VectorDB
+            if commit_hash:
+                self._write_to_vectordb(
+                    operation_type="remove",
+                    commit_hash=commit_hash,
+                    prompt=prompt,
+                    response=response,
+                    by_user=by_user,
+                    files=[target_rel_path],
+                )
 
             LOGGER.info(
                 f"Removed file from working directory: {target_abs_path} and committed in memov repo."
@@ -997,3 +1069,139 @@ class MemovManager:
             return "remove"
         else:
             return "unknown"
+
+    def _write_to_vectordb(
+        self,
+        operation_type: str,
+        commit_hash: str,
+        prompt: Optional[str],
+        response: Optional[str],
+        by_user: bool,
+        files: list[str],
+    ) -> None:
+        """
+        Write operation data to VectorDB.
+
+        Args:
+            operation_type: Type of operation (track, snap, rename, remove)
+            commit_hash: Git commit hash
+            prompt: User prompt
+            response: AI response or plan
+            by_user: Whether operation was initiated by user
+            files: List of affected file paths
+        """
+        try:
+            # Get parent commit
+            parent_hash = None
+            head_commit = GitManager.get_commit_id_by_ref(
+                self.bare_repo_path, "refs/memov/HEAD", verbose=False
+            )
+            if head_commit and head_commit != commit_hash:
+                parent_hash = head_commit
+
+            # Prepare text content for embedding
+            text_parts = []
+            if prompt:
+                text_parts.append(f"Prompt: {prompt}")
+            if response:
+                text_parts.append(f"Response: {response}")
+            text_parts.append(f"Files: {', '.join(files)}")
+            text_parts.append(f"Operation: {operation_type}")
+
+            text_content = "\n".join(text_parts)
+
+            # Prepare metadata
+            metadata = {
+                "operation_type": operation_type,
+                "source": "user" if by_user else "ai",
+                "files": files,
+                "commit_hash": commit_hash,
+                "parent_hash": parent_hash or "",
+                "timestamp": datetime.now().isoformat(),
+            }
+
+            # Insert into VectorDB
+            self.vectordb.insert(
+                text=text_content,
+                metadata=metadata,
+                doc_id=commit_hash,
+            )
+
+            LOGGER.debug(f"Wrote commit {commit_hash} to VectorDB")
+
+        except Exception as e:
+            LOGGER.warning(f"Failed to write to VectorDB: {e}")
+            # Don't fail the operation if VectorDB write fails
+
+    def find_similar_prompts(
+        self, query_prompt: str, n_results: int = 5, operation_type: Optional[str] = None
+    ) -> list[dict]:
+        """
+        Find prompts similar to the given query.
+
+        Args:
+            query_prompt: The prompt text to search for
+            n_results: Number of results to return (default: 5)
+            operation_type: Optional filter by operation type (track, snap, etc.)
+
+        Returns:
+            List of similar prompts with their commit information
+        """
+        try:
+            return self.vectordb.find_similar_prompts(
+                query_prompt=query_prompt,
+                n_results=n_results,
+                operation_type=operation_type,
+            )
+        except Exception as e:
+            LOGGER.error(f"Error finding similar prompts: {e}")
+            return []
+
+    def find_commits_by_prompt(
+        self, query_prompt: str, n_results: int = 5
+    ) -> list[str]:
+        """
+        Find commit IDs with prompts similar to the query.
+
+        Args:
+            query_prompt: The prompt text to search for
+            n_results: Number of results to return
+
+        Returns:
+            List of commit hashes
+        """
+        try:
+            results = self.find_similar_prompts(query_prompt, n_results)
+            return [r["metadata"].get("commit_hash") for r in results if "metadata" in r]
+        except Exception as e:
+            LOGGER.error(f"Error finding commits by prompt: {e}")
+            return []
+
+    def find_commits_by_files(self, file_paths: list[str]) -> list[dict]:
+        """
+        Find commits that involve specific files.
+
+        Args:
+            file_paths: List of file paths to search for
+
+        Returns:
+            List of commits involving these files
+        """
+        try:
+            return self.vectordb.find_commits_by_files(file_paths)
+        except Exception as e:
+            LOGGER.error(f"Error finding commits by files: {e}")
+            return []
+
+    def get_vectordb_info(self) -> dict:
+        """
+        Get information about the VectorDB collection.
+
+        Returns:
+            Dictionary with collection statistics
+        """
+        try:
+            return self.vectordb.get_collection_info()
+        except Exception as e:
+            LOGGER.error(f"Error getting VectorDB info: {e}")
+            return {}

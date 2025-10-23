@@ -23,10 +23,18 @@ mem-mcp-launcher = "mem_mcp_server.server.mcp_launcher:main"
 package = true
 
 [tool.setuptools]
-packages = ["memov", "mem_mcp_server", "mem_mcp_server.cli", "mem_mcp_server.server", "mem_mcp_server.utils"]
+packages = [
+    "memov",
+    "memov.core",
+    "memov.utils",
+    "mem_mcp_server",
+    "mem_mcp_server.cli",
+    "mem_mcp_server.server",
+    "mem_mcp_server.utils"
+]
 
 [tool.setuptools.package-data]
-mem_mcp_server = ["**/*.py"]
+"*" = ["**/*.py"]
 
 [tool.black]
 line-length = 100

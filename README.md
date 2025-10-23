@@ -35,7 +35,7 @@ It gives AI coding agents a traceable memory layer beyond Git — auto-capturing
 
 ## Features
 
-- 📒 **Context-bound memory**: Automatically track user prompts, agent plans, and code changes — independent of Git history
+- 📒 **Context-bound memory**: Automatically track user GitDiffs, prompts, and agent plans — independent of Git history
 - 🐞 **Vibe debugging**: Isolate faulty context and leverage it across LLMs for 5× faster fixing
 - 🤝 **Team context sharing**: Real-time alignment with zero friction
 - ♻️ **Change reuse**: Reapply past code edits by description to save tokens when iterating on a feature

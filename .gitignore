@@ -174,3 +174,6 @@ secrets.json
 tests/integration/test_playground/sample_project/
 tests/integration/test_playground/*.log
 tests/integration/test_playground/*.txt
+
+# mem cache
+.mem

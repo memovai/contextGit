@@ -50,79 +50,15 @@ Please see [docs/installation.md](docs/installation.md) for detailed installatio
 
 Please see [docs/installation_for_dev.md](docs/installation_for_dev.md) for detailed installation instructions.
 
-## How It Works
+## MCP Tools
 
-### Core: Git Plumbing Commands
+These are available to MCP clients through the server:
 
-MemoV doesn't reinvent version control — it **leverages Git's low-level plumbing commands** to create a separate, parallel timeline:
+- `mem_snap(files_changed: str)`
+  - Create a mem snapshot tied to the previously set user prompt. Handles untracked vs modified files intelligently. Argument is a comma-separated list of relative paths.
 
-- **Bare repository** (`.mem/memov.git`): Stores all snapshots independently from your main Git repo
-- **Git objects** (blobs, trees, commits): Uses the same proven data structures as Git
-- **No working tree pollution**: Changes are committed directly to the bare repo without touching your workspace
-- **Full history access**: Jump between any snapshot, diff changes, or cherry-pick edits
-
-This means MemoV is:
-- ✅ **Fast** - leverages Git's optimized object storage
-- ✅ **Reliable** - built on Git's battle-tested foundation
-- ✅ **Space-efficient** - deduplication through content-addressable storage
-- ✅ **Completely separate** - zero interference with your Git workflow
-- ✅ **Token-efficient** - no need to waste tokens asking agents to write commit messages or run git commands
-
-### MCP Integration: Automatic Context Capture
-
-The MCP server sits between your AI coding agent and MemoV, automatically capturing every interaction:
-
-**1. Agent makes changes** → AI edits files in your workspace
-
-**2. MCP `snap()` is called** → Automatically triggered after each AI response with:
-   - `user_prompt`: What you asked for
-   - `agent_plan`: What the AI decided to do (file-by-file summary)
-   - `files_changed`: Which files were modified/created
-
-**3. Smart file handling**:
-   - **Manual edits detected?** → Captured first in a separate commit (marked as "User")
-   - **New files?** → Tracked via `mem track` (adds to timeline)
-   - **Modified tracked files?** → Snapshotted via `mem snap` (records diff)
-
-**4. Result**: Every AI interaction becomes a commit with full context — prompt + plan + code changes bound together
-
-**Example workflow**:
-```
-User: "Add error handling to the API"
-  ↓
-AI changes api/routes.py
-  ↓
-MCP snap() called automatically
-  ↓
-Commit created:
-  - Prompt: "Add error handling to the API"
-  - Plan: ["api/routes.py: Added try-catch wrapper and error logging"]
-  - Diff: +15 lines in handle_request()
-```
-
-This creates a **traceable memory** where you can always see:
-- What you asked for
-- What the AI planned to do
-- What actually changed in the code
-
-**Why this saves tokens:**
-
-Traditional approach:
-```
-You: "Add error handling"
-Agent: *makes changes*
-You: "Now commit these changes with a good message"
-Agent: *reads files again, writes commit message, runs git commands*
-```
-❌ Wastes tokens on: re-reading files, generating commit messages, git operations
-
-MemoV approach:
-```
-You: "Add error handling"
-Agent: *makes changes*
-MCP: *automatically captures everything*
-```
-✅ Zero extra tokens - context is captured instantly without agent involvement
+- `GET /health`
+  - Returns "OK". Useful for IDE/agent readiness checks.
 
 
 ## License

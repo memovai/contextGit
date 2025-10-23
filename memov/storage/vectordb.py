@@ -1,6 +1,7 @@
 """Vector database implementation using ChromaDB."""
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -14,28 +15,37 @@ logger = logging.getLogger(__name__)
 
 
 class VectorDB:
-    """Vector database wrapper for memov using ChromaDB."""
+    """Vector database wrapper for memov using ChromaDB with lightweight embedding options."""
 
     def __init__(
         self,
         persist_directory: Path,
         collection_name: str = "memov_memories",
         chunk_size: int = 768,
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_backend: str = "default",
+        embedding_model: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
     ):
         """
-        Initialize the vector database.
+        Initialize the vector database with flexible embedding backends.
 
         Args:
             persist_directory: Directory to persist the ChromaDB database
             collection_name: Name of the ChromaDB collection
             chunk_size: Maximum size of text chunks (default: 768)
-            embedding_model: Sentence transformer model name (default: all-MiniLM-L6-v2)
+            embedding_backend: Backend to use:
+                - "default" (recommended): ChromaDB's built-in embedding (~50MB)
+                - "fastembed": FastEmbed with ONNX Runtime (~30MB)
+                - "openai": OpenAI API (requires API key, <5MB)
+                - "sentence-transformers": Original implementation (~1.5GB)
+            embedding_model: Optional model name override
+            openai_api_key: OpenAI API key (required if backend="openai")
         """
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(parents=True, exist_ok=True)
         self.collection_name = collection_name
         self.chunker = TextChunker(chunk_size=chunk_size)
+        self.embedding_backend = embedding_backend
 
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
@@ -43,9 +53,9 @@ class VectorDB:
             settings=Settings(anonymized_telemetry=False),
         )
 
-        # Initialize embedding function
-        self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=embedding_model
+        # Initialize embedding function based on backend
+        self.embedding_function = self._create_embedding_function(
+            embedding_backend, embedding_model, openai_api_key
         )
 
         # Get or create collection
@@ -57,8 +67,83 @@ class VectorDB:
 
         logger.info(
             f"VectorDB initialized at {self.persist_directory} "
-            f"with collection '{self.collection_name}'"
+            f"with collection '{self.collection_name}' using '{embedding_backend}' backend"
         )
+
+    def _create_embedding_function(
+        self,
+        backend: str,
+        model_name: Optional[str],
+        openai_api_key: Optional[str],
+    ):
+        """
+        Create appropriate embedding function based on backend choice.
+
+        Args:
+            backend: Embedding backend type
+            model_name: Optional model name override
+            openai_api_key: OpenAI API key if using OpenAI backend
+
+        Returns:
+            Embedding function compatible with ChromaDB
+        """
+        if backend == "default":
+            # Use ChromaDB's built-in default embedding (lightweight, no extra deps)
+            logger.info("Using ChromaDB default embedding (lightweight, ~50MB)")
+            return embedding_functions.DefaultEmbeddingFunction()
+
+        elif backend == "fastembed":
+            # Use FastEmbed with ONNX Runtime (lightweight alternative)
+            try:
+                from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+
+                logger.info("Using FastEmbed ONNX embedding (~30MB)")
+                return ONNXMiniLM_L6_V2()
+            except ImportError:
+                logger.warning(
+                    "FastEmbed not available, falling back to default. "
+                    "Install with: pip install chromadb[onnx]"
+                )
+                return embedding_functions.DefaultEmbeddingFunction()
+
+        elif backend == "openai":
+            # Use OpenAI API (requires API key, very lightweight client)
+            api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "OpenAI API key required. Set OPENAI_API_KEY environment variable "
+                    "or pass openai_api_key parameter"
+                )
+
+            logger.info("Using OpenAI embedding API (requires API key)")
+            model = model_name or "text-embedding-3-small"
+            return embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key, model_name=model
+            )
+
+        elif backend == "sentence-transformers":
+            # Original implementation (heavy, ~1.5GB)
+            try:
+                logger.warning(
+                    "Using sentence-transformers backend (~1.5GB). "
+                    "Consider using 'default' or 'fastembed' for lighter installation."
+                )
+                model = model_name or "all-MiniLM-L6-v2"
+                return embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name=model
+                )
+            except ImportError:
+                logger.error(
+                    "sentence-transformers not available. "
+                    "Install with: pip install sentence-transformers"
+                )
+                raise
+
+        else:
+            raise ValueError(
+                f"Unknown embedding backend: {backend}. "
+                f"Choose from: default, fastembed, openai, sentence-transformers"
+            )
 
     def insert(
         self,
@@ -265,7 +350,9 @@ class VectorDB:
             all_docs = self.get_all()
             for doc in all_docs:
                 metadata = doc.get("metadata", {})
-                files = metadata.get("files", [])
+                # Files are stored as comma-separated string
+                files_str = metadata.get("files", "")
+                files = [f.strip() for f in files_str.split(",") if f.strip()]
                 commit_hash = metadata.get("commit_hash")
 
                 if file_path in files and commit_hash not in seen_commit_hashes:

@@ -56,10 +56,19 @@ class MemovManager:
     def vectordb(self) -> VectorDB:
         """Get or initialize the VectorDB instance."""
         if self._vectordb is None:
+            # Use lightweight default embedding (no heavy dependencies)
+            # To use other backends, set MEMOV_EMBEDDING_BACKEND environment variable:
+            # - "default": ChromaDB built-in (~50MB) - RECOMMENDED
+            # - "fastembed": ONNX Runtime (~30MB)
+            # - "openai": OpenAI API (<5MB, requires API key)
+            # - "sentence-transformers": Original (~1.5GB)
+            embedding_backend = os.getenv("MEMOV_EMBEDDING_BACKEND", "default")
+
             self._vectordb = VectorDB(
                 persist_directory=Path(self.vectordb_path),
                 collection_name="memov_memories",
                 chunk_size=768,
+                embedding_backend=embedding_backend,
             )
         return self._vectordb
 
@@ -1111,10 +1120,11 @@ class MemovManager:
             text_content = "\n".join(text_parts)
 
             # Prepare metadata
+            # Note: ChromaDB only supports str, int, float, bool as metadata values
             metadata = {
                 "operation_type": operation_type,
                 "source": "user" if by_user else "ai",
-                "files": files,
+                "files": ", ".join(files),  # Convert list to comma-separated string
                 "commit_hash": commit_hash,
                 "parent_hash": parent_hash or "",
                 "timestamp": datetime.now().isoformat(),

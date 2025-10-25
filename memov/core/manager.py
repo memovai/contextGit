@@ -52,6 +52,10 @@ class MemovManager:
         # Initialize VectorDB (lazy initialization - only when needed)
         self._vectordb: Optional[VectorDB] = None
 
+        # Memory cache for pending VectorDB writes
+        # Format: list of dicts with keys: operation_type, commit_hash, prompt, response, agent_plan, by_user, files
+        self._pending_writes: list[dict] = []
+
     @property
     def vectordb(self) -> VectorDB:
         """Get or initialize the VectorDB instance."""
@@ -255,12 +259,13 @@ class MemovManager:
                 f"Tracked file(s) in memov repo and committed: {[abs_path for _, abs_path in new_files]}"
             )
 
-            # Write to VectorDB
-            self._write_to_vectordb(
+            # Add to pending writes (will be synced later via mem sync)
+            self._add_to_pending_writes(
                 operation_type="track",
                 commit_hash=commit_hash,
                 prompt=prompt,
                 response=response,
+                agent_plan=None,  # track operations typically don't have agent plans
                 by_user=by_user,
                 files=[rel_file for rel_file, _ in new_files],
             )
@@ -277,6 +282,7 @@ class MemovManager:
         file_paths: Optional[list[str]] = None,
         prompt: Optional[str] = None,
         response: Optional[str] = None,
+        agent_plan: Optional[str] = None,
         by_user: bool = False,
     ) -> MemStatus:
         """Create a snapshot of the current project state in the memov repo, generating a commit to record the operation.
@@ -404,12 +410,13 @@ class MemovManager:
                 self._update_branch(commit_hash)
                 LOGGER.info("Snapshot created in memov repo.")
 
-                # Write to VectorDB
-                self._write_to_vectordb(
+                # Add to pending writes (will be synced later via mem sync)
+                self._add_to_pending_writes(
                     operation_type="snap",
                     commit_hash=commit_hash,
                     prompt=prompt,
                     response=response,
+                    agent_plan=agent_plan,
                     by_user=by_user,
                     files=list(tracked_specified),
                 )
@@ -439,13 +446,14 @@ class MemovManager:
             commit_hash = self._commit(commit_msg, commit_file_paths)
             LOGGER.info("Snapshot created in memov repo.")
 
-            # Write to VectorDB
+            # Add to pending writes (will be synced later via mem sync)
             if commit_hash:
-                self._write_to_vectordb(
+                self._add_to_pending_writes(
                     operation_type="snap",
                     commit_hash=commit_hash,
                     prompt=prompt,
                     response=response,
+                    agent_plan=agent_plan,
                     by_user=by_user,
                     files=tracked_file_rel_paths,
                 )
@@ -513,14 +521,15 @@ class MemovManager:
             file_list = {rel_path: abs_path for rel_path, abs_path in file_list}
             commit_hash = self._commit(commit_msg, file_list)
 
-            # Write to VectorDB
+            # Add to pending writes (will be synced later via mem sync)
             if commit_hash:
                 new_rel_path = os.path.relpath(new_abs_path, self.project_path)
-                self._write_to_vectordb(
+                self._add_to_pending_writes(
                     operation_type="rename",
                     commit_hash=commit_hash,
                     prompt=prompt,
                     response=response,
+                    agent_plan=None,
                     by_user=by_user,
                     files=[old_rel_path, new_rel_path],
                 )
@@ -593,13 +602,14 @@ class MemovManager:
 
             commit_hash = self._commit(commit_msg, file_list)
 
-            # Write to VectorDB
+            # Add to pending writes (will be synced later via mem sync)
             if commit_hash:
-                self._write_to_vectordb(
+                self._add_to_pending_writes(
                     operation_type="remove",
                     commit_hash=commit_hash,
                     prompt=prompt,
                     response=response,
+                    agent_plan=None,
                     by_user=by_user,
                     files=[target_rel_path],
                 )
@@ -1079,23 +1089,28 @@ class MemovManager:
         else:
             return "unknown"
 
-    def _write_to_vectordb(
+    def _add_to_pending_writes(
         self,
         operation_type: str,
         commit_hash: str,
         prompt: Optional[str],
         response: Optional[str],
+        agent_plan: Optional[str],
         by_user: bool,
         files: list[str],
     ) -> None:
         """
-        Write operation data to VectorDB.
+        Add operation data to pending writes cache (in-memory).
+
+        This method does NOT write to VectorDB immediately. Instead, it adds the data
+        to a memory cache. Use sync_to_vectordb() to batch write all pending operations.
 
         Args:
             operation_type: Type of operation (track, snap, rename, remove)
             commit_hash: Git commit hash
             prompt: User prompt
-            response: AI response or plan
+            response: AI response
+            agent_plan: Agent plan (high-level summary of changes)
             by_user: Whether operation was initiated by user
             files: List of affected file paths
         """
@@ -1108,40 +1123,92 @@ class MemovManager:
             if head_commit and head_commit != commit_hash:
                 parent_hash = head_commit
 
-            # Prepare text content for embedding
-            text_parts = []
-            if prompt:
-                text_parts.append(f"Prompt: {prompt}")
-            if response:
-                text_parts.append(f"Response: {response}")
-            text_parts.append(f"Files: {', '.join(files)}")
-            text_parts.append(f"Operation: {operation_type}")
-
-            text_content = "\n".join(text_parts)
-
-            # Prepare metadata
-            # Note: ChromaDB only supports str, int, float, bool as metadata values
-            metadata = {
-                "operation_type": operation_type,
-                "source": "user" if by_user else "ai",
-                "files": ", ".join(files),  # Convert list to comma-separated string
-                "commit_hash": commit_hash,
-                "parent_hash": parent_hash or "",
-                "timestamp": datetime.now().isoformat(),
-            }
-
-            # Insert into VectorDB
-            self.vectordb.insert(
-                text=text_content,
-                metadata=metadata,
-                doc_id=commit_hash,
+            # Add to pending writes
+            self._pending_writes.append(
+                {
+                    "operation_type": operation_type,
+                    "commit_hash": commit_hash,
+                    "prompt": prompt,
+                    "response": response,
+                    "agent_plan": agent_plan,
+                    "by_user": by_user,
+                    "files": files,
+                    "parent_hash": parent_hash,
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
 
-            LOGGER.debug(f"Wrote commit {commit_hash} to VectorDB")
+            LOGGER.debug(
+                f"Added commit {commit_hash} to pending writes cache "
+                f"(total pending: {len(self._pending_writes)})"
+            )
 
         except Exception as e:
-            LOGGER.warning(f"Failed to write to VectorDB: {e}")
-            # Don't fail the operation if VectorDB write fails
+            LOGGER.warning(f"Failed to add to pending writes: {e}")
+
+    def sync_to_vectordb(self) -> tuple[int, int]:
+        """
+        Batch write all pending operations to VectorDB.
+
+        This method processes all cached operations in _pending_writes and writes them
+        to the VectorDB using the splitted embedding approach (prompt, response, agent_plan
+        are stored as separate documents).
+
+        Returns:
+            Tuple of (successful_writes, failed_writes)
+        """
+        if not self._pending_writes:
+            LOGGER.info("No pending writes to sync")
+            return (0, 0)
+
+        LOGGER.info(f"Syncing {len(self._pending_writes)} pending writes to VectorDB...")
+
+        successful = 0
+        failed = 0
+
+        for write_data in self._pending_writes:
+            try:
+                # Prepare base metadata
+                metadata = {
+                    "operation_type": write_data["operation_type"],
+                    "source": "user" if write_data["by_user"] else "ai",
+                    "files": ", ".join(write_data["files"]),
+                    "commit_hash": write_data["commit_hash"],
+                    "parent_hash": write_data.get("parent_hash", ""),
+                    "timestamp": write_data["timestamp"],
+                }
+
+                # Use splitted insertion for independent retrieval
+                self.vectordb.insert_splitted(
+                    commit_hash=write_data["commit_hash"],
+                    prompt=write_data.get("prompt"),
+                    response=write_data.get("response"),
+                    agent_plan=write_data.get("agent_plan"),
+                    metadata=metadata,
+                )
+
+                LOGGER.debug(f"Synced commit {write_data['commit_hash']} to VectorDB")
+                successful += 1
+
+            except Exception as e:
+                LOGGER.warning(f"Failed to sync commit {write_data['commit_hash']}: {e}")
+                failed += 1
+
+        # Clear pending writes after sync
+        self._pending_writes.clear()
+
+        LOGGER.info(f"Sync completed: {successful} successful, {failed} failed")
+        return (successful, failed)
+
+    def get_pending_writes_count(self) -> int:
+        """Get the number of pending writes in the cache."""
+        return len(self._pending_writes)
+
+    def clear_pending_writes(self) -> None:
+        """Clear all pending writes without syncing (data will be lost)."""
+        count = len(self._pending_writes)
+        self._pending_writes.clear()
+        LOGGER.warning(f"Cleared {count} pending writes without syncing")
 
     def find_similar_prompts(
         self, query_prompt: str, n_results: int = 5, operation_type: Optional[str] = None

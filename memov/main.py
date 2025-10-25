@@ -187,6 +187,44 @@ def version() -> None:
 
 
 @app.command()
+def sync(loc: LocOption = ".") -> None:
+    """Sync pending operations to VectorDB for semantic search.
+
+    This command batch writes all cached operations (from snap, track, etc.)
+    to the VectorDB. Pending operations are stored in memory during the session
+    and must be explicitly synced using this command.
+
+    Example:
+        mem snap file1.py
+        mem snap file2.py
+        mem sync  # Write all pending operations to VectorDB
+    """
+    manager = get_manager(loc)
+
+    # Check pending writes count
+    pending_count = manager.get_pending_writes_count()
+
+    if pending_count == 0:
+        console.print("[yellow]No pending writes to sync[/yellow]")
+        return
+
+    console.print(f"[blue]Syncing {pending_count} pending operation(s) to VectorDB...[/blue]")
+
+    # Perform sync
+    successful, failed = manager.sync_to_vectordb()
+
+    # Report results
+    if failed == 0:
+        console.print(f"[green]✓ Successfully synced {successful} operation(s)[/green]")
+    else:
+        console.print(
+            f"[yellow]Sync completed with errors:[/yellow]\n"
+            f"  [green]✓ Successful: {successful}[/green]\n"
+            f"  [red]✗ Failed: {failed}[/red]"
+        )
+
+
+@app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Search query (prompt text or file path)")],
     loc: LocOption = ".",

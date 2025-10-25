@@ -190,17 +190,11 @@ class MemMCPTools:
             if not os.path.exists(MemMCPTools._project_path):
                 raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
 
-            # Concatenate the agent plan into the original response for full context
-            agent_plan_dict = {
-                "plan" + str(i + 1): plan_step for i, plan_step in enumerate(agent_plan)
-            }
-            full_response = (
-                "[Agent Plan]:\n"
-                + '"planning_strategy": '
-                + str(agent_plan_dict)
-                + "\n\n[Agent Response]:\n"
-                + original_response
-            )
+            # Convert agent_plan list to formatted string for storage
+            # Each plan step is stored on a separate line for better readability
+            agent_plan_str = None
+            if agent_plan:
+                agent_plan_str = "\n".join([f"{i+1}. {step}" for i, step in enumerate(agent_plan)])
 
             # Prepare the variables
             memov_manager = MemovManager(project_path=MemMCPTools._project_path)
@@ -228,7 +222,9 @@ class MemMCPTools:
                     "[SUCCESS] Interaction recorded (no file changes, no snapshot created)"
                 ]
                 result_parts.append(f"Prompt: {user_prompt}")
-                result_parts.append(f"Response: {len(full_response)} characters")
+                result_parts.append(f"Response: {len(original_response)} characters")
+                if agent_plan_str:
+                    result_parts.append(f"Agent plan: {len(agent_plan_str)} characters")
                 result = "\n".join(result_parts)
                 LOGGER.info(f"Interaction recorded successfully: {result}")
                 return result
@@ -273,6 +269,7 @@ class MemMCPTools:
                         file_paths=manual_edit_files,
                         prompt="Manual edits detected before AI operation",
                         response=f"User manually edited: {', '.join([Path(f).name for f in manual_edit_files])}",
+                        agent_plan=None,  # No agent plan for manual edits
                         by_user=True,
                     )
                     if manual_snap_status is not MemStatus.SUCCESS:
@@ -313,7 +310,7 @@ class MemMCPTools:
                     track_status = memov_manager.track(
                         files_to_track,
                         prompt=user_prompt,
-                        response=full_response,
+                        response=original_response,
                         by_user=False,
                     )
                     if track_status is not MemStatus.SUCCESS:
@@ -326,7 +323,8 @@ class MemMCPTools:
                     snap_status = memov_manager.snapshot(
                         file_paths=files_to_snap,
                         prompt=user_prompt,
-                        response=full_response,
+                        response=original_response,
+                        agent_plan=agent_plan_str,
                         by_user=False,
                     )
                     if snap_status is not MemStatus.SUCCESS:
@@ -340,14 +338,89 @@ class MemMCPTools:
                         f"Manual edits captured: {', '.join([Path(f).name for f in manual_edit_files])}"
                     )
                 result_parts.append(f"Prompt: {user_prompt}")
-                result_parts.append(f"Response: {len(full_response)} characters")
+                result_parts.append(f"Response: {len(original_response)} characters")
+                if agent_plan_str:
+                    result_parts.append(f"Agent plan: {len(agent_plan_str)} characters")
                 result_parts.append(f"AI changes: {', '.join(files_processed)}")
+                result_parts.append(
+                    f"\n[NOTE] Changes are cached in memory. Run 'mem sync' to persist to VectorDB for search."
+                )
                 result = "\n".join(result_parts)
                 LOGGER.info(f"Operation completed successfully: {result}")
                 return result
 
         except Exception as e:
             error_msg = f"[ERROR] Error in snap: {str(e)}"
+            LOGGER.error(error_msg, exc_info=True)
+            return error_msg
+
+    @staticmethod
+    @mcp.tool()
+    def mem_sync() -> str:
+        """Sync all pending operations to VectorDB for semantic search.
+
+        **CRITICAL: This must be called periodically to enable semantic search!**
+
+        This tool batch writes all cached operations (from snap, track, etc.) to the VectorDB.
+        Without calling this tool, operations will only exist in memory and won't be searchable.
+
+        **When to call:**
+        - After a series of snap operations (e.g., every 3-5 snaps)
+        - At the end of a work session
+        - Before running semantic search queries
+        - When explicitly requested by the user
+
+        **What happens:**
+        - Writes all pending operations to VectorDB with splitted embeddings
+        - Prompt, response, and agent_plan are stored as separate searchable documents
+        - Enables semantic search by prompt, response, or agent plan
+
+        Returns:
+            Result message with sync statistics (successful/failed writes)
+        """
+        try:
+            LOGGER.info("mem_sync called")
+
+            if MemMCPTools._project_path is None:
+                raise ValueError("Project path is not set.")
+
+            if not os.path.exists(MemMCPTools._project_path):
+                raise ValueError(f"Project path '{MemMCPTools._project_path}' does not exist.")
+
+            # Prepare the manager
+            memov_manager = MemovManager(project_path=MemMCPTools._project_path)
+
+            # Check if memov is initialized
+            if (check_status := memov_manager.check()) is not MemStatus.SUCCESS:
+                return f"[ERROR] Memov not initialized: {check_status}. Run 'mem init' first."
+
+            # Get pending writes count
+            pending_count = memov_manager.get_pending_writes_count()
+
+            if pending_count == 0:
+                LOGGER.info("No pending writes to sync")
+                return "[INFO] No pending operations to sync. All up to date!"
+
+            LOGGER.info(f"Syncing {pending_count} pending operation(s) to VectorDB...")
+
+            # Perform sync
+            successful, failed = memov_manager.sync_to_vectordb()
+
+            # Build result message
+            if failed == 0:
+                result = f"[SUCCESS] Synced {successful} operation(s) to VectorDB\n"
+                result += "All operations are now searchable via semantic search!"
+            else:
+                result = f"[PARTIAL SUCCESS] Sync completed with errors:\n"
+                result += f"  ✓ Successful: {successful}\n"
+                result += f"  ✗ Failed: {failed}\n"
+                result += f"Check logs for error details."
+
+            LOGGER.info(f"Sync completed: {successful} successful, {failed} failed")
+            return result
+
+        except Exception as e:
+            error_msg = f"[ERROR] Error in mem_sync: {str(e)}"
             LOGGER.error(error_msg, exc_info=True)
             return error_msg
 

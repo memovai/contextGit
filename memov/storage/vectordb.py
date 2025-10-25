@@ -310,6 +310,99 @@ class VectorDB:
 
         return parsed_results
 
+    def insert_splitted(
+        self,
+        commit_hash: str,
+        prompt: Optional[str] = None,
+        response: Optional[str] = None,
+        agent_plan: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
+        """
+        Insert prompt, response, and agent_plan as separate documents for independent retrieval.
+
+        This method splits the content into three separate documents:
+        - prompt document (content_type: "prompt")
+        - response document (content_type: "response")
+        - agent_plan document (content_type: "agent_plan")
+
+        Each document shares the same base metadata but can be retrieved independently.
+
+        Args:
+            commit_hash: Git commit hash (used as base doc_id)
+            prompt: User prompt text
+            response: AI response text
+            agent_plan: Agent plan text
+            metadata: Base metadata dictionary to be shared across all documents
+
+        Returns:
+            List of inserted document IDs
+        """
+        base_metadata = metadata or {}
+        inserted_ids = []
+
+        # Insert prompt as separate document
+        if prompt and prompt.strip():
+            prompt_metadata = {**base_metadata, "content_type": "prompt"}
+            prompt_ids = self.insert(
+                text=prompt,
+                metadata=prompt_metadata,
+                doc_id=f"{commit_hash}_prompt",
+            )
+            inserted_ids.extend(prompt_ids)
+
+        # Insert response as separate document
+        if response and response.strip():
+            response_metadata = {**base_metadata, "content_type": "response"}
+            response_ids = self.insert(
+                text=response,
+                metadata=response_metadata,
+                doc_id=f"{commit_hash}_response",
+            )
+            inserted_ids.extend(response_ids)
+
+        # Insert agent_plan as separate document
+        if agent_plan and agent_plan.strip():
+            plan_metadata = {**base_metadata, "content_type": "agent_plan"}
+            plan_ids = self.insert(
+                text=agent_plan,
+                metadata=plan_metadata,
+                doc_id=f"{commit_hash}_agent_plan",
+            )
+            inserted_ids.extend(plan_ids)
+
+        logger.debug(
+            f"Inserted {len(inserted_ids)} documents for commit {commit_hash} "
+            f"(prompt: {bool(prompt)}, response: {bool(response)}, agent_plan: {bool(agent_plan)})"
+        )
+        return inserted_ids
+
+    def search_by_content_type(
+        self,
+        query_text: str,
+        content_type: str,
+        n_results: int = 5,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search by specific content type (prompt, response, or agent_plan).
+
+        Args:
+            query_text: The query text to search for
+            content_type: Content type to filter ("prompt", "response", or "agent_plan")
+            n_results: Number of results to return (default: 5)
+            where: Optional additional filter conditions
+
+        Returns:
+            List of search results filtered by content_type
+        """
+        # Build where clause with content_type filter
+        where_clause = {"content_type": content_type}
+        if where:
+            where_clause.update(where)
+
+        return self.search(query_text=query_text, n_results=n_results, where=where_clause)
+
     def find_similar_prompts(
         self, query_prompt: str, n_results: int = 5, operation_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -328,7 +421,62 @@ class VectorDB:
         if operation_type:
             where = {"operation_type": operation_type}
 
-        return self.search(query_text=query_prompt, n_results=n_results, where=where)
+        return self.search_by_content_type(
+            query_text=query_prompt,
+            content_type="prompt",
+            n_results=n_results,
+            where=where,
+        )
+
+    def find_similar_responses(
+        self, query_response: str, n_results: int = 5, operation_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Find responses similar to the query response.
+
+        Args:
+            query_response: The response text to search for
+            n_results: Number of similar responses to return
+            operation_type: Optional filter by operation type (track, snap, etc.)
+
+        Returns:
+            List of similar responses with their commit hashes
+        """
+        where = None
+        if operation_type:
+            where = {"operation_type": operation_type}
+
+        return self.search_by_content_type(
+            query_text=query_response,
+            content_type="response",
+            n_results=n_results,
+            where=where,
+        )
+
+    def find_similar_agent_plans(
+        self, query_plan: str, n_results: int = 5, operation_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Find agent plans similar to the query plan.
+
+        Args:
+            query_plan: The agent plan text to search for
+            n_results: Number of similar plans to return
+            operation_type: Optional filter by operation type (track, snap, etc.)
+
+        Returns:
+            List of similar agent plans with their commit hashes
+        """
+        where = None
+        if operation_type:
+            where = {"operation_type": operation_type}
+
+        return self.search_by_content_type(
+            query_text=query_plan,
+            content_type="agent_plan",
+            n_results=n_results,
+            where=where,
+        )
 
     def find_commits_by_files(self, file_paths: List[str]) -> List[Dict[str, Any]]:
         """
